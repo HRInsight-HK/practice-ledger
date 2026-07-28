@@ -187,7 +187,7 @@ router.delete('/:id', authMiddleware, requireRole('hr', 'manager'), (req, res) =
 router.get('/feedback-form/:token', (req, res) => {
   const data = getData();
   const r = data.records.find(x => x.feedbackToken === req.params.token);
-  if (!r) return res.status(404).send('反馈链接无效或已过期');
+  if (!r) return res.status(404).json({ error: '反馈链接无效或已过期' });
 
   res.json({
     id: r.id,

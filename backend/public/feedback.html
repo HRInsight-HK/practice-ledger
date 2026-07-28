@@ -56,8 +56,10 @@ const token = window.location.pathname.split('/').pop();
 async function init() {
   try {
     const res = await fetch('/api/records/feedback-form/' + token);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || '加载失败');
+    let data;
+    try { data = await res.json(); }
+    catch(_) { throw new Error('反馈链接无效或已过期，请联系SSC（Zoe）重新获取'); }
+    if (!res.ok) throw new Error(data.error || '加载失败，请稍后重试');
     if (data.hasFeedback) {
       renderAlreadySubmitted(data);
     } else {
