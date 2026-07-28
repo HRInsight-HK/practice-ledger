@@ -63,9 +63,9 @@ app.listen(PORT, () => {
   console.log('  地址: http://localhost:' + PORT);
   console.log('  问卷表单: http://localhost:' + PORT + '/questionnaire');
   console.log('  账号:');
-  console.log('    行政: admin / admin123');
-  console.log('    HR:   hr / hr666');
-  console.log('    管理: manager / mgr888');
+  console.log('    行政: admin / admin123 (莫青霖)');
+  console.log('    SSC:  hr / hr666 (Zoe)');
+  console.log('    HRD:  manager / mgr888 (massie)');
   console.log('  企微机器人: ' + (process.env.WECOM_BOT_WEBHOOK ? '已配置' : '未配置(设置 WECOM_BOT_WEBHOOK 环境变量)'));
   console.log('========================================');
 });

@@ -306,8 +306,8 @@ tr:hover { background: var(--gray-bg); }
       <button class="login-btn" id="loginBtn" onclick="doLogin()">登 录</button>
       <div class="login-hint">
         需求方登记请<a href="/questionnaire" style="color:#fff;font-weight:600;text-decoration:underline;">点击填写问卷</a><br>
-        默认账号：admin / admin123（行政）<br>
-        hr / hr666（HR）· manager / mgr888（管理层）
+        默认账号：admin / admin123（行政·莫青霖）<br>
+        hr / hr666（SSC·Zoe）· manager / mgr888（HRD·massie）
       </div>
     </div>
   </div>
@@ -562,8 +562,8 @@ tr:hover { background: var(--gray-bg); }
             <label class="form-label">角色 <span class="req">*</span></label>
             <select class="form-select" id="acc_role">
               <option value="admin">行政</option>
-              <option value="hr">HR</option>
-              <option value="manager">管理层</option>
+              <option value="hr">SSC</option>
+              <option value="manager">HRD</option>
             </select>
           </div>
         </div>
@@ -685,7 +685,7 @@ const STATUS_CONFIG = {
   settled: { label: '已结算', badge: 'badge-settled' },
   onboarded: { label: '已入职', badge: 'badge-onboarded' },
 };
-const ROLE_LABELS = { admin: '行政', hr: 'HR', manager: '管理层' };
+const ROLE_LABELS = { admin: '行政', hr: 'SSC', manager: 'HRD' };
 
 // ==================== API ====================
 async function api(method, url, body) {
@@ -991,7 +991,7 @@ async function saveRecord() {
 }
 
 function openSalaryModal(id) {
-  showToast('薪资管理已迁移至本地HR工具，请使用本地工具登记薪资', 'error');
+  showToast('薪资管理已迁移至本地SSC工具，请使用本地工具登记薪资', 'error');
 }
 
 // ==================== Feedback ====================
@@ -1128,7 +1128,7 @@ function openDetail(id) {
   // Salary (HR/Manager only)
   if (seeSalary) {
     if (r.salaryBase || r.salaryStructure) {
-      html += '<div class="detail-section"><div class="detail-section-title">薪资结构（HR登记）</div><div class="salary-struct-box">' +
+      html += '<div class="detail-section"><div class="detail-section-title">薪资结构（SSC登记）</div><div class="salary-struct-box">' +
         '<div class="label">薪资结构</div><div class="value">' + (r.salaryStructure || '—') + '</div></div>' +
         '<div class="detail-grid">' +
         '<div class="detail-item"><span class="detail-label">基本工资</span><span class="detail-value">' + (r.salaryBase || 0) + ' 元/月</span></div>' +
@@ -1136,7 +1136,7 @@ function openDetail(id) {
         (r.salaryNote ? '<div class="detail-item full"><span class="detail-label">薪资备注</span><span class="detail-value" style="font-weight:400;">' + r.salaryNote + '</span></div>' : '') +
         '</div></div>';
     } else {
-      html += '<div class="detail-section"><div class="detail-section-title">薪资结构（HR登记）</div><div class="days-text">尚未登记薪资</div></div>';
+      html += '<div class="detail-section"><div class="detail-section-title">薪资结构（SSC登记）</div><div class="days-text">尚未登记薪资</div></div>';
     }
 
     if (r.feedback) {
@@ -1172,7 +1172,7 @@ function openDetail(id) {
     // Admin view - only show status flags
     let flags = '';
     if (r.hasSalary) flags += '<div class="detail-item"><span class="detail-label">薪资结构</span><span class="detail-value" style="color:var(--green);">已登记</span></div>';
-    else flags += '<div class="detail-item"><span class="detail-label">薪资结构</span><span class="detail-value days-text">待HR登记</span></div>';
+    else flags += '<div class="detail-item"><span class="detail-label">薪资结构</span><span class="detail-value days-text">待SSC登记</span></div>';
     if (r.hasFeedback) flags += '<div class="detail-item"><span class="detail-label">实操反馈</span><span class="detail-value" style="color:var(--green);">已反馈</span></div>';
     if (r.hasSettlement) flags += '<div class="detail-item"><span class="detail-label">结算</span><span class="detail-value" style="color:var(--green);">已结算</span></div>';
     if (r.hasOnboarding) flags += '<div class="detail-item"><span class="detail-label">入职</span><span class="detail-value" style="color:var(--green);">已入职</span></div>';

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HR本地薪资管理工具</title>
+<title>SSC本地薪资管理工具</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   :root {
@@ -106,7 +106,7 @@
 <div class="auth-wrap" id="configScreen">
   <div class="auth-card">
     <div class="icon">⚙️</div>
-    <h1>HR本地工具</h1>
+    <h1>SSC本地工具</h1>
     <p class="sub">请输入云端服务地址</p>
     <div class="form-group">
       <label class="form-label">云端服务URL</label>
@@ -121,7 +121,7 @@
 <div class="auth-wrap hidden" id="loginScreen">
   <div class="auth-card">
     <div class="icon">🔐</div>
-    <h1>HR登录</h1>
+    <h1>SSC登录</h1>
     <p class="sub" id="loginCloudLabel">连接到云端服务</p>
     <div class="form-group">
       <label class="form-label">用户名</label>
@@ -146,7 +146,7 @@
 <div class="hidden" id="mainApp">
   <div class="header">
     <div class="header-left">
-      <div class="header-title">HR薪资管理后台</div>
+      <div class="header-title">SSC薪资管理后台</div>
       <div class="header-badge">本地模式 · 薪资不上云</div>
     </div>
     <div class="header-right">
@@ -375,7 +375,7 @@ async function doLogin() {
     const data = await api('/auth/login', 'POST', {
       username, password,
       deviceModel: navigator.userAgent.slice(0, 80),
-      accessories: 'HR本地工具',
+      accessories: 'SSC本地工具',
       serialNumber: localPwd
     });
     jwtToken = data.token;

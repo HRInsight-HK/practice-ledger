@@ -77,9 +77,9 @@ router.post('/accounts', authMiddleware, requireRole('hr', 'manager'), (req, res
     return res.status(400).json({ error: '角色无效' });
   }
 
-  // HR 只能创建行政账号
+  // SSC 只能创建行政账号
   if (req.user.role === 'hr' && role !== 'admin') {
-    return res.status(403).json({ error: 'HR 只能创建行政账号' });
+    return res.status(403).json({ error: 'SSC 只能创建行政账号' });
   }
 
   const data = getData();
