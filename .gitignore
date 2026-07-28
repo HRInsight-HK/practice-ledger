@@ -1,0 +1,12 @@
+node_modules/
+.env
+data/db.json
+uploads/
+.workbuddy/
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+~$*.docx
+~$*.xlsx
+~$*.pptx

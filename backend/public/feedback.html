@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实操反馈表单</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; background:#f5f6fa; color:#1a1a2e; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .card { background:#fff; border-radius:16px; box-shadow:0 2px 20px rgba(0,0,0,0.08); max-width:520px; width:100%; padding:36px; }
+  .icon { width:56px; height:56px; border-radius:50%; background:#e8f0fe; display:flex; align-items:center; justify-content:center; font-size:28px; margin:0 auto 16px; }
+  h1 { font-size:20px; font-weight:600; text-align:center; margin-bottom:6px; }
+  .subtitle { font-size:13px; color:#888; text-align:center; margin-bottom:28px; }
+  .info-box { background:#f8f9fb; border-radius:10px; padding:16px; margin-bottom:24px; }
+  .info-row { display:flex; justify-content:space-between; padding:5px 0; font-size:13px; }
+  .info-row span:first-child { color:#888; }
+  .info-row span:last-child { font-weight:500; }
+  .form-group { margin-bottom:18px; }
+  .form-label { display:block; font-size:13px; font-weight:500; margin-bottom:8px; }
+  .form-hint { font-size:12px; color:#aaa; font-weight:400; }
+  .radio-group { display:flex; gap:12px; }
+  .radio-card { flex:1; border:2px solid #e8e8e8; border-radius:10px; padding:16px; cursor:pointer; text-align:center; transition:all .2s; }
+  .radio-card:hover { border-color:#bbb; }
+  .radio-card.selected-pass { border-color:#1a9e75; background:#e1f5ee; }
+  .radio-card.selected-fail { border-color:#e24b4a; background:#fcebeb; }
+  .radio-card .emoji { font-size:24px; margin-bottom:6px; }
+  .radio-card .label { font-size:14px; font-weight:500; }
+  .radio-card .desc { font-size:11px; color:#999; margin-top:2px; }
+  textarea, input[type="number"] { width:100%; border:1px solid #ddd; border-radius:8px; padding:10px 12px; font-size:14px; font-family:inherit; resize:vertical; }
+  textarea:focus, input:focus { outline:none; border-color:#378add; }
+  .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .btn { width:100%; padding:14px; border:none; border-radius:10px; font-size:15px; font-weight:500; cursor:pointer; transition:all .2s; }
+  .btn-primary { background:#378add; color:#fff; }
+  .btn-primary:hover { background:#185fa5; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .success-screen { text-align:center; padding:20px 0; }
+  .success-icon { width:64px; height:64px; border-radius:50%; background:#e1f5ee; display:flex; align-items:center; justify-content:center; font-size:32px; margin:0 auto 16px; }
+  .error-screen { text-align:center; padding:40px 0; }
+  .error-icon { font-size:48px; margin-bottom:16px; }
+  .loading { text-align:center; padding:40px; color:#888; }
+  .spinner { width:32px; height:32px; border:3px solid #e8e8e8; border-top-color:#378add; border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 12px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="card" id="app">
+  <div class="loading">
+    <div class="spinner"></div>
+    <div>正在加载反馈表单...</div>
+  </div>
+</div>
+
+<script>
+const token = window.location.pathname.split('/').pop();
+
+async function init() {
+  try {
+    const res = await fetch('/api/records/feedback-form/' + token);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '加载失败');
+    if (data.hasFeedback) {
+      renderAlreadySubmitted(data);
+    } else {
+      renderForm(data);
+    }
+  } catch(e) {
+    renderError(e.message);
+  }
+}
+
+function renderError(msg) {
+  document.getElementById('app').innerHTML = `
+    <div class="error-screen">
+      <div class="error-icon">:(</div>
+      <h1>无法加载</h1>
+      <p class="subtitle">${msg}</p>
+    </div>`;
+}
+
+function renderAlreadySubmitted(d) {
+  document.getElementById('app').innerHTML = `
+    <div class="success-screen">
+      <div class="success-icon">✓</div>
+      <h1>反馈已提交</h1>
+      <p class="subtitle">${d.name} 的实操反馈已提交，人事正在处理中</p>
+    </div>`;
+}
+
+function renderForm(d) {
+  document.getElementById('app').innerHTML = `
+    <div class="icon">📋</div>
+    <h1>实操反馈表单</h1>
+    <p class="subtitle">请带教人填写以下反馈信息</p>
+    <div class="info-box">
+      <div class="info-row"><span>实操人员</span><span>${d.name}</span></div>
+      <div class="info-row"><span>带教人</span><span>${d.mentor}</span></div>
+      <div class="info-row"><span>实操周期</span><span>${d.startDate} ~ ${d.endDate}</span></div>
+      <div class="info-row"><span>预计天数</span><span>${d.practiceDays} 天</span></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">实操结果 <span class="form-hint">（必选）</span></label>
+      <div class="radio-group">
+        <div class="radio-card" id="card-pass" onclick="selectResult('pass')">
+          <div class="emoji">✅</div>
+          <div class="label">通过</div>
+          <div class="desc">建议入职</div>
+        </div>
+        <div class="radio-card" id="card-fail" onclick="selectResult('fail')">
+          <div class="emoji">❌</div>
+          <div class="label">不通过</div>
+          <div class="desc">结算离场</div>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">出勤记录</label>
+      <div class="grid-3">
+        <div>
+          <input type="number" id="attendanceDays" value="${d.practiceDays}" min="0" placeholder="出勤天数">
+          <div class="form-hint" style="text-align:center;margin-top:4px;">出勤天数</div>
+        </div>
+        <div>
+          <input type="number" id="lateCount" value="0" min="0" placeholder="迟到次数">
+          <div class="form-hint" style="text-align:center;margin-top:4px;">迟到次数</div>
+        </div>
+        <div>
+          <input type="number" id="earlyLeaveCount" value="0" min="0" placeholder="早退次数">
+          <div class="form-hint" style="text-align:center;margin-top:4px;">早退次数</div>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">反馈意见 <span class="form-hint">（技能掌握、工作态度、建议等）</span></label>
+      <textarea id="note" rows="4" placeholder="请填写详细反馈意见..."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">上传凭证 <span class="form-hint">（纸质反馈表照片/扫描件，可选）</span></label>
+      <input type="file" id="attachment" accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.pdf" style="width:100%;font-size:13px;padding:8px;border:1px solid #ddd;border-radius:8px;">
+      <div class="form-hint" style="margin-top:4px;">支持图片和PDF，最大10MB</div>
+    </div>
+    <button class="btn btn-primary" id="submitBtn" onclick="submitFeedback()">提交反馈</button>
+  `;
+}
+
+let selectedResult = null;
+
+function selectResult(r) {
+  selectedResult = r;
+  document.getElementById('card-pass').className = 'radio-card' + (r === 'pass' ? ' selected-pass' : '');
+  document.getElementById('card-fail').className = 'radio-card' + (r === 'fail' ? ' selected-fail' : '');
+}
+
+async function submitFeedback() {
+  if (!selectedResult) { alert('请选择实操结果'); return; }
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = '提交中...';
+
+  try {
+    const formData = new FormData();
+    formData.append('result', selectedResult);
+    formData.append('note', document.getElementById('note').value.trim());
+    formData.append('attendanceDays', document.getElementById('attendanceDays').value);
+    formData.append('lateCount', document.getElementById('lateCount').value);
+    formData.append('earlyLeaveCount', document.getElementById('earlyLeaveCount').value);
+
+    const fileInput = document.getElementById('attachment');
+    if (fileInput.files[0]) {
+      formData.append('attachment', fileInput.files[0]);
+    }
+
+    const res = await fetch('/api/records/feedback-form/' + token, {
+      method: 'POST',
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '提交失败');
+    document.getElementById('app').innerHTML = `
+      <div class="success-screen">
+        <div class="success-icon">✓</div>
+        <h1>提交成功</h1>
+        <p class="subtitle">反馈已提交，人事将尽快处理${selectedResult === 'pass' ? '入职手续' : '薪资结算'}</p>
+      </div>`;
+  } catch(e) {
+    alert(e.message);
+    btn.disabled = false;
+    btn.textContent = '提交反馈';
+  }
+}
+
+init();
+</script>
+</body>
+</html>

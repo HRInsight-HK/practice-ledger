@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: practice-ledger
+    env: node
+    region: singapore
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: WECOM_BOT_WEBHOOK
+        sync: false
+      - key: CLOUD_BASE_URL
+        sync: false
+      - key: HR_WECOM_USERID
+        sync: false
+      - key: MANAGER_WECOM_USERID
+        sync: false
+      - key: ADMIN_WECOM_USERID
+        sync: false

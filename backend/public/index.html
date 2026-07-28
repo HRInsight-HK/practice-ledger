@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实操台账管理系统</title>
+<style>
+:root {
+  --primary: #4f6ef7;
+  --primary-dark: #3d5bd9;
+  --primary-light: #eef1fe;
+  --green: #16a34a;
+  --green-light: #dcfce7;
+  --orange: #ea580c;
+  --orange-light: #fff7ed;
+  --red: #dc2626;
+  --red-light: #fef2f2;
+  --blue: #2563eb;
+  --blue-light: #eff6ff;
+  --gray: #6b7280;
+  --gray-light: #f3f4f6;
+  --gray-bg: #f9fafb;
+  --text: #111827;
+  --text-secondary: #4b5563;
+  --text-tertiary: #9ca3af;
+  --border: #e5e7eb;
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--gray-bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ==================== Login Page ==================== */
+.login-wrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+}
+.login-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  width: 100%;
+  max-width: 420px;
+  overflow: hidden;
+}
+.login-header {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: #fff;
+  padding: 32px 28px 24px;
+  text-align: center;
+}
+.login-header h1 { font-size: 22px; margin-bottom: 4px; }
+.login-header p { font-size: 13px; opacity: 0.85; }
+.login-body { padding: 28px; }
+.login-form-group { margin-bottom: 16px; }
+.login-form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary); }
+.login-form-group input {
+  width: 100%; padding: 10px 14px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-size: 14px; transition: border 0.2s;
+}
+.login-form-group input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+.login-device-section {
+  background: var(--gray-bg); border-radius: var(--radius-sm);
+  padding: 16px; margin: 20px 0;
+}
+.login-device-section .section-label { font-size: 12px; color: var(--text-tertiary); margin-bottom: 10px; }
+.login-btn {
+  width: 100%; padding: 12px; background: var(--primary); color: #fff;
+  border: none; border-radius: var(--radius-sm); font-size: 15px;
+  font-weight: 600; cursor: pointer; transition: background 0.2s;
+}
+.login-btn:hover { background: var(--primary-dark); }
+.login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.login-error {
+  background: var(--red-light); color: var(--red); padding: 10px 14px;
+  border-radius: var(--radius-sm); font-size: 13px; margin-bottom: 16px; display: none;
+}
+.login-hint {
+  text-align: center; font-size: 12px; color: var(--text-tertiary);
+  margin-top: 20px; line-height: 1.8;
+}
+
+/* ==================== App Layout ==================== */
+.app-wrapper { display: none; }
+.app-header {
+  background: #fff; border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 56px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.app-header-left { display: flex; align-items: center; gap: 16px; }
+.app-title { font-size: 16px; font-weight: 600; }
+.role-badge {
+  font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500;
+}
+.role-badge.admin { background: var(--blue-light); color: var(--blue); }
+.role-badge.hr { background: var(--green-light); color: var(--green); }
+.role-badge.manager { background: #fef3c7; color: #92400e; }
+.app-header-right { display: flex; align-items: center; gap: 10px; }
+.user-info { font-size: 13px; color: var(--text-secondary); }
+.btn-logout {
+  padding: 6px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: #fff; cursor: pointer; font-size: 13px; color: var(--text-secondary);
+}
+.btn-logout:hover { background: var(--gray-bg); }
+
+/* ==================== Main Content ==================== */
+.app-main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+/* Stats */
+.stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card {
+  background: #fff; border-radius: var(--radius); padding: 16px 20px;
+  border: 1px solid var(--border);
+}
+.stat-card .stat-label { font-size: 12px; color: var(--text-tertiary); margin-bottom: 6px; }
+.stat-card .stat-value { font-size: 24px; font-weight: 700; }
+.stat-card.alert .stat-value { color: var(--red); }
+.stat-card.pending .stat-value { color: var(--orange); }
+
+/* Filter tabs */
+.filter-tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.filter-tab {
+  padding: 6px 16px; border-radius: 20px; border: 1px solid var(--border);
+  background: #fff; cursor: pointer; font-size: 13px; color: var(--text-secondary);
+  transition: all 0.2s;
+}
+.filter-tab:hover { border-color: var(--primary); }
+.filter-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.filter-tab .count { margin-left: 4px; font-size: 11px; opacity: 0.8; }
+
+/* Toolbar */
+.toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; }
+.search-box {
+  padding: 8px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 13px; width: 260px;
+}
+.search-box:focus { outline: none; border-color: var(--primary); }
+.toolbar-right { display: flex; gap: 10px; }
+
+/* Buttons */
+.btn { padding: 8px 16px; border-radius: var(--radius-sm); border: none; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-default { background: #fff; border: 1px solid var(--border); color: var(--text-secondary); }
+.btn-default:hover { background: var(--gray-bg); }
+.btn-success { background: var(--green); color: #fff; }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-text { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 13px; padding: 4px 8px; }
+.btn-text:hover { text-decoration: underline; }
+.btn-text.btn-danger-text { color: var(--red); }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+/* Table */
+.table-wrapper { background: #fff; border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; }
+table { width: 100%; border-collapse: collapse; }
+thead { background: var(--gray-bg); }
+th { padding: 12px 16px; text-align: left; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
+td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
+tr:last-child td { border-bottom: none; }
+tr:hover { background: var(--gray-bg); }
+
+/* Badges */
+.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+.badge-practicing { background: var(--blue-light); color: var(--blue); }
+.badge-feedback_pending { background: var(--orange-light); color: var(--orange); }
+.badge-feedback_done { background: #f3e8ff; color: #7c3aed; }
+.badge-settled { background: var(--gray-light); color: var(--gray); }
+.badge-onboarded { background: var(--green-light); color: var(--green); }
+.badge-red { background: var(--red-light); color: var(--red); cursor: pointer; }
+
+/* Progress */
+.progress-bar { width: 60px; height: 6px; background: var(--gray-light); border-radius: 3px; overflow: hidden; display: inline-block; }
+.progress-fill { height: 100%; border-radius: 3px; }
+.days-text { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+.days-overdue { color: var(--red); font-weight: 600; }
+.days-soon { color: var(--orange); font-weight: 600; }
+
+/* Action group */
+.action-group { display: flex; gap: 4px; }
+
+/* ==================== Modal ==================== */
+.modal-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5); z-index: 200;
+  align-items: flex-start; justify-content: center; padding: 40px 20px;
+  overflow-y: auto;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: #fff; border-radius: var(--radius); width: 100%; max-width: 600px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3); margin: auto;
+}
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 24px; border-bottom: 1px solid var(--border);
+}
+.modal-title { font-size: 16px; font-weight: 600; }
+.modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-tertiary); }
+.modal-body { padding: 24px; max-height: 60vh; overflow-y: auto; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+
+/* Form */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-group { margin-bottom: 16px; }
+.form-group.full { grid-column: 1 / -1; }
+.form-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary); }
+.form-label .req { color: var(--red); }
+.form-label .hint { color: var(--text-tertiary); font-weight: 400; font-size: 12px; }
+.form-input, .form-select, .form-textarea {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-size: 13px; font-family: inherit;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+.form-textarea { resize: vertical; min-height: 60px; }
+
+/* Detail */
+.detail-section { margin-bottom: 20px; }
+.detail-section-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.detail-item { display: flex; flex-direction: column; gap: 2px; }
+.detail-item.full { grid-column: 1 / -1; }
+.detail-label { font-size: 12px; color: var(--text-tertiary); }
+.detail-value { font-size: 14px; font-weight: 500; }
+
+/* Timeline */
+.timeline { display: flex; gap: 0; margin: 16px 0; }
+.timeline-step { flex: 1; text-align: center; position: relative; }
+.timeline-step::before { content: ''; position: absolute; top: 14px; left: 50%; width: 100%; height: 2px; background: var(--border); z-index: 0; }
+.timeline-step:last-child::before { display: none; }
+.timeline-dot { width: 28px; height: 28px; border-radius: 50%; background: var(--gray-light); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; margin: 0 auto 6px; font-size: 12px; position: relative; z-index: 1; }
+.timeline-step.done .timeline-dot { background: var(--green); border-color: var(--green); color: #fff; }
+.timeline-step.current .timeline-dot { background: var(--primary); border-color: var(--primary); color: #fff; }
+.timeline-title { font-size: 12px; font-weight: 500; }
+.timeline-desc { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+
+/* Toast */
+.toast { position: fixed; top: 20px; right: 20px; z-index: 300; padding: 12px 20px; border-radius: var(--radius-sm); font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none; }
+.toast.show { display: block; animation: slideIn 0.3s; }
+.toast.success { background: var(--green); color: #fff; }
+.toast.error { background: var(--red); color: #fff; }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-tertiary); }
+.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+
+/* Salary structure box */
+.salary-struct-box { background: var(--gray-bg); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 12px; }
+.salary-struct-box .label { font-size: 12px; color: var(--text-tertiary); margin-bottom: 4px; }
+.salary-struct-box .value { font-size: 14px; font-weight: 500; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+  .form-grid { grid-template-columns: 1fr; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .search-box { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== Login Page ==================== -->
+<div class="login-wrapper" id="loginPage">
+  <div class="login-card">
+    <div class="login-header">
+      <h1>实操台账管理系统</h1>
+      <p>请使用账号密码登录</p>
+    </div>
+    <div class="login-body">
+      <div class="login-error" id="loginError"></div>
+      <div class="login-form-group">
+        <label>用户名 / 企微账号</label>
+        <input type="text" id="loginUser" placeholder="请输入用户名" autocomplete="username">
+      </div>
+      <div class="login-form-group">
+        <label>密码</label>
+        <input type="password" id="loginPwd" placeholder="请输入密码" autocomplete="current-password">
+      </div>
+      <div class="login-device-section">
+        <div class="section-label">设备信息（登录审计记录）</div>
+        <div class="login-form-group" style="margin-bottom:10px;">
+          <label>设备型号</label>
+          <input type="text" id="loginDevice" placeholder="如：ThinkPad T14 / iPhone 15">
+        </div>
+        <div class="login-form-group" style="margin-bottom:10px;">
+          <label>配件</label>
+          <input type="text" id="loginAccessories" placeholder="如：扩展坞、外接显示器">
+        </div>
+        <div class="login-form-group" style="margin-bottom:0;">
+          <label>序列号</label>
+          <input type="text" id="loginSerial" placeholder="设备序列号">
+        </div>
+      </div>
+      <button class="login-btn" id="loginBtn" onclick="doLogin()">登 录</button>
+      <div class="login-hint">
+        需求方登记请<a href="/questionnaire" style="color:#fff;font-weight:600;text-decoration:underline;">点击填写问卷</a><br>
+        默认账号：admin / admin123（行政）<br>
+        hr / hr666（HR）· manager / mgr888（管理层）
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== App ==================== -->
+<div class="app-wrapper" id="appPage">
+  <!-- Header -->
+  <div class="app-header">
+    <div class="app-header-left">
+      <div class="app-title">实操台账管理系统</div>
+      <span class="role-badge" id="roleBadge"></span>
+    </div>
+    <div class="app-header-right">
+      <span class="user-info" id="userInfo"></span>
+      <button class="btn btn-default btn-sm" id="btnAccounts" style="display:none;" onclick="openAccountsModal()">👥 账号管理</button>
+      <button class="btn btn-default btn-sm" id="btnLogs" style="display:none;" onclick="openLogsModal()">📋 登录日志</button>
+      <button class="btn-logout" onclick="logout()">退出</button>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="app-main">
+    <div class="stats-row" id="statsRow"></div>
+    <div class="filter-tabs" id="filterTabs"></div>
+    <div class="toolbar">
+      <input type="text" class="search-box" id="searchBox" placeholder="搜索姓名或带教人..." oninput="renderTable()">
+      <div class="toolbar-right">
+        <button class="btn btn-default" id="btnQuestionnaire" style="display:none;" onclick="openQuestionnaireModal()">📋 问卷需求</button>
+        <button class="btn btn-default" onclick="exportCSV()">📄 导出</button>
+        <button class="btn btn-primary" id="btnRegister" onclick="openRegisterModal()">＋ 登记实操人员</button>
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Register Modal ==================== -->
+<div class="modal-overlay" id="registerModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="registerTitle">登记实操人员</div>
+      <button class="modal-close" onclick="closeModal('registerModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">实操人员姓名 <span class="req">*</span></label>
+          <input type="text" class="form-input" id="f_name" placeholder="请输入姓名">
+        </div>
+        <div class="form-group">
+          <label class="form-label">带教人（上级）<span class="req">*</span></label>
+          <input type="text" class="form-input" id="f_mentor" placeholder="请输入带教人姓名">
+        </div>
+        <div class="form-group">
+          <label class="form-label">实操开始日期 <span class="req">*</span></label>
+          <input type="date" class="form-input" id="f_startDate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">预计实操天数 <span class="req">*</span></label>
+          <input type="number" class="form-input" id="f_days" placeholder="天" min="1" oninput="checkPracticeDays(this,'f_days_warn')">
+          <div id="f_days_warn" style="display:none;color:#dc2626;font-size:12px;margin-top:4px;line-height:1.5;">⚠️ 实操天数超过7天，存在用工风险！建议控制在7天以内。超过7天可能产生事实劳动关系，引发劳动仲裁。</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">设备型号</label>
+          <input type="text" class="form-input" id="f_deviceModel" placeholder="如：ThinkPad T14">
+        </div>
+        <div class="form-group">
+          <label class="form-label">序列号</label>
+          <input type="text" class="form-input" id="f_serialNumber" placeholder="设备序列号">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">配件情况</label>
+          <input type="text" class="form-input" id="f_accessories" placeholder="如：扩展坞、外接显示器、键盘鼠标">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">备注</label>
+          <input type="text" class="form-input" id="f_remark" placeholder="可选">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('registerModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveRecord()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Salary Modal ==================== -->
+<div class="modal-overlay" id="salaryModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">登记薪资结构</div>
+      <button class="modal-close" onclick="closeModal('salaryModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div id="salaryPersonInfo" style="background:var(--gray-bg); padding:12px 16px; border-radius:var(--radius-sm); margin-bottom:20px; font-size:13px; color:var(--text-secondary);"></div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label class="form-label">薪资结构描述 <span class="hint">（入职前谈定）</span></label>
+          <input type="text" class="form-input" id="f_salaryStructure" placeholder="如：基本工资+绩效+补贴">
+        </div>
+        <div class="form-group">
+          <label class="form-label">基本工资 <span class="hint">（元/月）</span></label>
+          <input type="number" class="form-input" id="f_salaryBase" placeholder="元/月" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">补贴/其他 <span class="hint">（元/月）</span></label>
+          <input type="number" class="form-input" id="f_salaryAllowance" placeholder="元/月" min="0">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">薪资备注</label>
+          <textarea class="form-textarea" id="f_salaryNote" placeholder="薪资说明、发放方式等"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('salaryModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveSalary()">保存薪资</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Feedback Modal ==================== -->
+<div class="modal-overlay" id="feedbackModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">实操反馈</div>
+      <button class="modal-close" onclick="closeModal('feedbackModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div id="feedbackPersonInfo" style="background:var(--gray-bg); padding:12px 16px; border-radius:var(--radius-sm); margin-bottom:20px; font-size:13px; color:var(--text-secondary);"></div>
+      <div class="form-group">
+        <label class="form-label">反馈结果 <span class="req">*</span></label>
+        <div style="display:flex; gap:12px; margin-top:8px;">
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:14px;">
+            <input type="radio" name="feedbackResult" value="pass"> 通过·建议入职
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:14px;">
+            <input type="radio" name="feedbackResult" value="fail"> 不通过·结算离场
+          </label>
+        </div>
+      </div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;">
+        <div class="form-group">
+          <label class="form-label">出勤天数</label>
+          <input type="number" class="form-input" id="f_attDays" min="0" placeholder="天">
+        </div>
+        <div class="form-group">
+          <label class="form-label">迟到次数</label>
+          <input type="number" class="form-input" id="f_lateCount" min="0" value="0" placeholder="次">
+        </div>
+        <div class="form-group">
+          <label class="form-label">早退次数</label>
+          <input type="number" class="form-input" id="f_earlyLeave" min="0" value="0" placeholder="次">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">反馈意见</label>
+        <textarea class="form-textarea" id="f_feedbackNote" placeholder="实操表现、技能评估、建议等"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">上传凭证（纸质反馈表/照片等）</label>
+        <input type="file" id="f_attachment" accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.pdf" style="font-size:13px;">
+        <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">支持图片和PDF，最大10MB</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('feedbackModal')">取消</button>
+      <button class="btn btn-primary" onclick="submitFeedback()">提交反馈</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Settlement Modal ==================== -->
+<div class="modal-overlay" id="settleModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title" id="settleTitle">办理结算</div>
+      <button class="modal-close" onclick="closeModal('settleModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div id="settlePersonInfo" style="background:var(--gray-bg); padding:12px 16px; border-radius:var(--radius-sm); margin-bottom:20px; font-size:13px; color:var(--text-secondary);"></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" id="settleDateLabel">结算日期 <span class="req">*</span></label>
+          <input type="date" class="form-input" id="f_settleDate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">结算金额 <span class="hint">（元）</span></label>
+          <input type="number" class="form-input" id="f_settleAmount" placeholder="自动计算或手动填写" min="0">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">备注</label>
+          <input type="text" class="form-input" id="f_settleNote" placeholder="可选">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('settleModal')">取消</button>
+      <button class="btn btn-primary" onclick="submitSettlement()">确认办理</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Detail Modal ==================== -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <div class="modal-title">人员详情</div>
+      <button class="modal-close" onclick="closeModal('detailModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer" id="detailFooter"></div>
+  </div>
+</div>
+
+<!-- ==================== Accounts Modal ==================== -->
+<div class="modal-overlay" id="accountsModal">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <div class="modal-title">账号管理</div>
+      <button class="modal-close" onclick="closeModal('accountsModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div id="accountsList"></div>
+      <div style="border-top:1px solid var(--border); margin-top:20px; padding-top:20px;">
+        <div style="font-size:14px; font-weight:600; margin-bottom:12px;">新增账号</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">用户名 <span class="req">*</span></label>
+            <input type="text" class="form-input" id="acc_username" placeholder="登录用户名">
+          </div>
+          <div class="form-group">
+            <label class="form-label">密码 <span class="req">*</span></label>
+            <input type="text" class="form-input" id="acc_password" placeholder="登录密码">
+          </div>
+          <div class="form-group">
+            <label class="form-label">姓名 <span class="req">*</span></label>
+            <input type="text" class="form-input" id="acc_name" placeholder="真实姓名">
+          </div>
+          <div class="form-group">
+            <label class="form-label">企微号</label>
+            <input type="text" class="form-input" id="acc_wecom" placeholder="可选">
+          </div>
+          <div class="form-group full">
+            <label class="form-label">角色 <span class="req">*</span></label>
+            <select class="form-select" id="acc_role">
+              <option value="admin">行政</option>
+              <option value="hr">HR</option>
+              <option value="manager">管理层</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="createAccount()">新增账号</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Logs Modal ==================== -->
+<div class="modal-overlay" id="logsModal">
+  <div class="modal" style="max-width:780px;">
+    <div class="modal-header">
+      <div class="modal-title">登录日志</div>
+      <button class="modal-close" onclick="closeModal('logsModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <table style="width:100%;">
+        <thead>
+          <tr>
+            <th>账号</th>
+            <th>姓名</th>
+            <th>角色</th>
+            <th>设备型号</th>
+            <th>配件</th>
+            <th>序列号</th>
+            <th>登录时间</th>
+          </tr>
+        </thead>
+        <tbody id="logsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Questionnaire Modal ==================== -->
+<div class="modal-overlay" id="questionnaireModal">
+  <div class="modal" style="max-width:820px;">
+    <div class="modal-header">
+      <div class="modal-title">实操需求问卷</div>
+      <button class="modal-close" onclick="closeModal('questionnaireModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="questionnaireBody"></div>
+  </div>
+</div>
+
+<!-- ==================== Import Modal ==================== -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="importTitle">导入问卷为台账记录</div>
+      <button class="modal-close" onclick="closeModal('importModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div id="importSourceInfo" style="background:var(--gray-bg); padding:12px 16px; border-radius:var(--radius-sm); margin-bottom:20px; font-size:13px; color:var(--text-secondary);"></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">实操人员姓名 <span class="req">*</span></label>
+          <input type="text" class="form-input" id="imp_name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">带教人 <span class="req">*</span></label>
+          <input type="text" class="form-input" id="imp_mentor">
+        </div>
+        <div class="form-group">
+          <label class="form-label">开始日期 <span class="req">*</span></label>
+          <input type="date" class="form-input" id="imp_startDate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">预计实操天数 <span class="req">*</span></label>
+          <input type="number" class="form-input" id="imp_days" min="1" oninput="checkPracticeDays(this,'imp_days_warn')">
+          <div id="imp_days_warn" style="display:none;color:#dc2626;font-size:12px;margin-top:4px;line-height:1.5;">⚠️ 实操天数超过7天，存在用工风险！建议控制在7天以内。</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">设备型号</label>
+          <input type="text" class="form-input" id="imp_deviceModel">
+        </div>
+        <div class="form-group">
+          <label class="form-label">序列号</label>
+          <input type="text" class="form-input" id="imp_serialNumber">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">配件情况</label>
+          <input type="text" class="form-input" id="imp_accessories">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">备注</label>
+          <input type="text" class="form-input" id="imp_remark">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('importModal')">取消</button>
+      <button class="btn btn-primary" onclick="confirmImport()">确认登记</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ==================== Global State ====================
+let token = localStorage.getItem('pl_token') || '';
+let currentUser = null;
+let records = [];
+let accounts = [];
+let currentFilter = 'all';
+let editingId = null;
+let salaryRecordId = null;
+let feedbackRecordId = null;
+let settleRecordId = null;
+let settleType = 'settle';
+
+const STATUS_CONFIG = {
+  practicing: { label: '实操中', badge: 'badge-practicing' },
+  feedback_pending: { label: '待反馈', badge: 'badge-feedback_pending' },
+  feedback_done: { label: '已反馈', badge: 'badge-feedback_done' },
+  settled: { label: '已结算', badge: 'badge-settled' },
+  onboarded: { label: '已入职', badge: 'badge-onboarded' },
+};
+const ROLE_LABELS = { admin: '行政', hr: 'HR', manager: '管理层' };
+
+// ==================== API ====================
+async function api(method, url, body) {
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch('/api' + url, opts);
+  const data = await res.json();
+  if (!res.ok) {
+    if (res.status === 401) { logout(); }
+    throw new Error(data.error || '请求失败');
+  }
+  return data;
+}
+
+// ==================== Auth ====================
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPwd').value;
+  const deviceModel = document.getElementById('loginDevice').value.trim();
+  const accessories = document.getElementById('loginAccessories').value.trim();
+  const serialNumber = document.getElementById('loginSerial').value.trim();
+  const errEl = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+
+  if (!username || !password) {
+    errEl.textContent = '请输入用户名和密码';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '登录中...';
+  errEl.style.display = 'none';
+
+  try {
+    const data = await api('POST', '/auth/login', { username, password, deviceModel, accessories, serialNumber });
+    token = data.token;
+    currentUser = data.user;
+    localStorage.setItem('pl_token', token);
+    showApp();
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '登 录';
+  }
+}
+
+function logout() {
+  token = '';
+  currentUser = null;
+  localStorage.removeItem('pl_token');
+  document.getElementById('loginPage').style.display = 'flex';
+  document.getElementById('appPage').style.display = 'none';
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPwd').value = '';
+}
+
+async function showApp() {
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('appPage').style.display = 'block';
+
+  // Role badge
+  const badge = document.getElementById('roleBadge');
+  badge.className = 'role-badge ' + currentUser.role;
+  badge.textContent = ROLE_LABELS[currentUser.role];
+
+  document.getElementById('userInfo').textContent = currentUser.name + ' (' + currentUser.username + ')';
+
+  // Show buttons by role
+  const isHR = currentUser.role === 'hr';
+  const isManager = currentUser.role === 'manager';
+  document.getElementById('btnAccounts').style.display = (isHR || isManager) ? '' : 'none';
+  document.getElementById('btnLogs').style.display = (isHR || isManager) ? '' : 'none';
+  document.getElementById('btnRegister').style.display = (currentUser.role === 'admin' || isHR) ? '' : 'none';
+  document.getElementById('btnQuestionnaire').style.display = (currentUser.role === 'admin' || isHR || isManager) ? '' : 'none';
+
+  await loadRecords();
+}
+
+// ==================== Records ====================
+async function loadRecords() {
+  try {
+    const data = await api('GET', '/records');
+    records = data.records;
+    renderAll();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function isHR() { return currentUser && currentUser.role === 'hr'; }
+function isManager() { return currentUser && currentUser.role === 'manager'; }
+function canEdit() { return currentUser && (currentUser.role === 'admin' || currentUser.role === 'hr'); }
+function canSeeSalary() { return currentUser && (currentUser.role === 'hr' || currentUser.role === 'manager'); }
+
+function renderAll() {
+  renderStats();
+  renderFilterTabs();
+  renderTable();
+}
+
+function renderStats() {
+  const total = records.length;
+  const practicing = records.filter(r => r.status === 'practicing').length;
+  const pending = records.filter(r => r.status === 'feedback_pending').length;
+  const done = records.filter(r => r.status === 'feedback_done').length;
+  const completed = records.filter(r => r.status === 'settled' || r.status === 'onboarded').length;
+  const today = todayStr();
+  const alert = records.filter(r => {
+    if (r.status !== 'practicing') return false;
+    const left = daysBetween(today, r.endDate);
+    return left <= 1;
+  }).length;
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="stat-card"><div class="stat-label">总人数</div><div class="stat-value">${total}</div></div>
+    <div class="stat-card"><div class="stat-label">实操中</div><div class="stat-value">${practicing}</div></div>
+    <div class="stat-card pending"><div class="stat-label">待反馈</div><div class="stat-value">${pending}</div></div>
+    <div class="stat-card"><div class="stat-label">已反馈</div><div class="stat-value">${done}</div></div>
+    <div class="stat-card alert"><div class="stat-label">需关注</div><div class="stat-value">${alert}</div></div>
+  `;
+}
+
+function renderFilterTabs() {
+  const today = todayStr();
+  const counts = {
+    all: records.length,
+    practicing: records.filter(r => r.status === 'practicing').length,
+    feedback_pending: records.filter(r => r.status === 'feedback_pending').length,
+    feedback_done: records.filter(r => r.status === 'feedback_done').length,
+    completed: records.filter(r => r.status === 'settled' || r.status === 'onboarded').length,
+    alert: records.filter(r => r.status === 'practicing' && daysBetween(today, r.endDate) <= 1).length,
+  };
+  const tabs = [
+    { key: 'all', label: '全部' },
+    { key: 'practicing', label: '实操中' },
+    { key: 'feedback_pending', label: '待反馈' },
+    { key: 'feedback_done', label: '已反馈' },
+    { key: 'completed', label: '已完结' },
+    { key: 'alert', label: '需关注' },
+  ];
+  document.getElementById('filterTabs').innerHTML = tabs.map(t =>
+    `<div class="filter-tab ${currentFilter === t.key ? 'active' : ''}" onclick="setFilter('${t.key}')">${t.label}<span class="count">${counts[t.key] || 0}</span></div>`
+  ).join('');
+}
+
+function setFilter(f) { currentFilter = f; renderFilterTabs(); renderTable(); }
+
+function getFilteredRecords() {
+  const today = todayStr();
+  let list = records;
+  if (currentFilter === 'practicing') list = list.filter(r => r.status === 'practicing');
+  else if (currentFilter === 'feedback_pending') list = list.filter(r => r.status === 'feedback_pending');
+  else if (currentFilter === 'feedback_done') list = list.filter(r => r.status === 'feedback_done');
+  else if (currentFilter === 'completed') list = list.filter(r => r.status === 'settled' || r.status === 'onboarded');
+  else if (currentFilter === 'alert') list = list.filter(r => r.status === 'practicing' && daysBetween(today, r.endDate) <= 1);
+
+  const q = document.getElementById('searchBox').value.trim().toLowerCase();
+  if (q) list = list.filter(r => (r.name || '').toLowerCase().includes(q) || (r.mentor || '').toLowerCase().includes(q));
+  return list;
+}
+
+function renderTable() {
+  const list = getFilteredRecords();
+  const showSalary = canSeeSalary();
+
+  // Header
+  let head = '<tr><th>实操人员</th><th>带教人</th><th>实操周期</th><th>剩余天数</th>';
+  if (showSalary) head += '<th>薪资结构</th>';
+  head += '<th>设备</th><th>状态</th><th style="text-align:right;">操作</th></tr>';
+  document.getElementById('tableHead').innerHTML = head;
+
+  if (list.length === 0) {
+    document.getElementById('tableBody').innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="icon">📋</div>暂无数据</div></td></tr>';
+    return;
+  }
+
+  const today = todayStr();
+  document.getElementById('tableBody').innerHTML = list.map(r => {
+    const cfg = STATUS_CONFIG[r.status] || { label: r.status, badge: '' };
+    const cycle = r.startDate + ' ~ ' + r.endDate;
+    let daysHtml = '';
+    if (r.status === 'practicing') {
+      const left = daysBetween(today, r.endDate);
+      const pct = Math.min(100, Math.max(0, 100 - (left / r.practiceDays) * 100));
+      let color = '#16a34a';
+      if (left < 0) color = '#dc2626';
+      else if (left <= 3) color = '#ea580c';
+      daysHtml = `<div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${color};"></div></div><div class="days-text ${left < 0 ? 'days-overdue' : left <= 3 ? 'days-soon' : ''}">${left < 0 ? '已超期' + Math.abs(left) + '天' : '剩' + left + '天'}</div>`;
+    } else if (r.status === 'feedback_pending') {
+      daysHtml = '<span class="days-text days-soon">待反馈</span>';
+    } else {
+      daysHtml = '<span class="days-text">—</span>';
+    }
+
+    let salaryCell = '';
+    if (showSalary) {
+      salaryCell = '<span style="font-size:11px;color:var(--text-tertiary);">请用本地工具</span>';
+    }
+
+    const deviceCell = r.deviceModel ? `${r.deviceModel}${r.serialNumber ? '<br><span class="days-text">' + r.serialNumber + '</span>' : ''}` : '—';
+
+    let actions = '<div class="action-group" style="justify-content:flex-end;">';
+    actions += `<button class="btn-text btn-sm" onclick="openDetail('${r.id}')">详情</button>`;
+    if (canEdit()) {
+      actions += `<button class="btn-text btn-sm" onclick="openRegisterModal('${r.id}')">编辑</button>`;
+    }
+    if (isHR()) {
+      if (r.status === 'practicing' || r.status === 'feedback_pending') {
+        actions += `<button class="btn-text btn-sm" onclick="openFeedback('${r.id}')">填写反馈</button>`;
+      }
+      if (r.status === 'feedback_done') {
+        if (r.feedback && r.feedback.result === 'pass') {
+          actions += `<button class="btn-text btn-sm" onclick="openSettlement('${r.id}','onboard')">办理入职</button>`;
+        } else {
+          actions += `<button class="btn-text btn-sm" onclick="openSettlement('${r.id}','settle')">办理结算</button>`;
+        }
+      }
+    }
+    if (isHR() || isManager()) {
+      actions += `<button class="btn-text btn-sm btn-danger-text" onclick="deleteRecord('${r.id}')">删除</button>`;
+    }
+    actions += '</div>';
+
+    return `<tr>
+      <td style="font-weight:500;">${r.name}</td>
+      <td>${r.mentor}</td>
+      <td style="white-space:nowrap;">${cycle}<br><span class="days-text">${r.practiceDays}天</span></td>
+      <td>${daysHtml}</td>
+      ${showSalary ? '<td>' + salaryCell + '</td>' : ''}
+      <td style="font-size:12px;">${deviceCell}</td>
+      <td><span class="badge ${cfg.badge}">${cfg.label}</span></td>
+      <td style="text-align:right;">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ==================== Register ====================
+function openRegisterModal(id) {
+  editingId = id || null;
+  const title = document.getElementById('registerTitle');
+  if (id) {
+    const r = records.find(x => x.id === id);
+    if (!r) return;
+    title.textContent = '编辑实操人员';
+    document.getElementById('f_name').value = r.name || '';
+    document.getElementById('f_mentor').value = r.mentor || '';
+    document.getElementById('f_startDate').value = r.startDate || '';
+    document.getElementById('f_days').value = r.practiceDays || '';
+    document.getElementById('f_deviceModel').value = r.deviceModel || '';
+    document.getElementById('f_serialNumber').value = r.serialNumber || '';
+    document.getElementById('f_accessories').value = r.accessories || '';
+    document.getElementById('f_remark').value = r.remark || '';
+  } else {
+    title.textContent = '登记实操人员';
+    ['f_name','f_mentor','f_days','f_deviceModel','f_serialNumber','f_accessories','f_remark'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f_startDate').value = todayStr();
+  }
+  showModal('registerModal');
+}
+
+async function saveRecord() {
+  const body = {
+    name: document.getElementById('f_name').value.trim(),
+    mentor: document.getElementById('f_mentor').value.trim(),
+    startDate: document.getElementById('f_startDate').value,
+    practiceDays: parseInt(document.getElementById('f_days').value),
+    deviceModel: document.getElementById('f_deviceModel').value.trim(),
+    serialNumber: document.getElementById('f_serialNumber').value.trim(),
+    accessories: document.getElementById('f_accessories').value.trim(),
+    remark: document.getElementById('f_remark').value.trim(),
+  };
+  if (!body.name) return showToast('请填写实操人员姓名', 'error');
+  if (!body.mentor) return showToast('请填写带教人', 'error');
+  if (!body.practiceDays || body.practiceDays < 1) return showToast('请填写有效的实操天数', 'error');
+  if (!body.startDate) return showToast('请选择实操开始日期', 'error');
+
+  try {
+    if (editingId) {
+      await api('PUT', '/records/' + editingId, body);
+      showToast('已更新', 'success');
+    } else {
+      const resp = await api('POST', '/records', body);
+      if (resp.warning) {
+        showToast('登记成功（' + resp.warning + '）', 'error');
+      } else {
+        showToast('登记成功', 'success');
+      }
+    }
+    closeModal('registerModal');
+    await loadRecords();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function openSalaryModal(id) {
+  showToast('薪资管理已迁移至本地HR工具，请使用本地工具登记薪资', 'error');
+}
+
+// ==================== Feedback ====================
+function openFeedback(id) {
+  feedbackRecordId = id;
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('feedbackPersonInfo').innerHTML = '<strong>' + r.name + '</strong> · 带教人：' + r.mentor + ' · 实操周期：' + r.startDate + ' ~ ' + r.endDate;
+  document.querySelectorAll('input[name="feedbackResult"]').forEach(r => r.checked = false);
+  document.getElementById('f_feedbackNote').value = '';
+  document.getElementById('f_attDays').value = r.practiceDays || '';
+  document.getElementById('f_lateCount').value = '0';
+  document.getElementById('f_earlyLeave').value = '0';
+  document.getElementById('f_attachment').value = '';
+  showModal('feedbackModal');
+}
+
+async function submitFeedback() {
+  const result = document.querySelector('input[name="feedbackResult"]:checked');
+  if (!result) return showToast('请选择反馈结果', 'error');
+
+  const formData = new FormData();
+  formData.append('result', result.value);
+  formData.append('note', document.getElementById('f_feedbackNote').value.trim());
+  formData.append('attendanceDays', document.getElementById('f_attDays').value || '0');
+  formData.append('lateCount', document.getElementById('f_lateCount').value || '0');
+  formData.append('earlyLeaveCount', document.getElementById('f_earlyLeave').value || '0');
+
+  const fileInput = document.getElementById('f_attachment');
+  if (fileInput.files[0]) {
+    formData.append('attachment', fileInput.files[0]);
+  }
+
+  try {
+    const resp = await fetch('/api/records/' + feedbackRecordId + '/feedback', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: formData
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || '提交失败');
+    showToast('反馈已提交', 'success');
+    closeModal('feedbackModal');
+    await loadRecords();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+// ==================== Settlement / Onboarding ====================
+function openSettlement(id, type) {
+  settleRecordId = id;
+  settleType = type;
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  const title = document.getElementById('settleTitle');
+  const dateLabel = document.getElementById('settleDateLabel');
+  if (type === 'onboard') {
+    title.textContent = '办理正式入职';
+    dateLabel.innerHTML = '入职日期 <span class="req">*</span>';
+  } else {
+    title.textContent = '办理结算离场';
+    dateLabel.innerHTML = '结算日期 <span class="req">*</span>';
+  }
+
+  let info = '<strong>' + r.name + '</strong> · 带教人：' + r.mentor + ' · 实操周期：' + r.startDate + ' ~ ' + r.endDate;
+  if (canSeeSalary() && r.salaryBase) {
+    info += '<br>薪资：基本' + r.salaryBase + ' + 补贴' + (r.salaryAllowance || 0) + ' /月';
+  }
+  document.getElementById('settlePersonInfo').innerHTML = info;
+
+  document.getElementById('f_settleDate').value = todayStr();
+  if (type === 'settle' && r.salaryBase) {
+    const daily = (r.salaryBase + (r.salaryAllowance || 0)) / 30;
+    document.getElementById('f_settleAmount').value = Math.round(daily * r.practiceDays);
+  } else {
+    document.getElementById('f_settleAmount').value = '';
+  }
+  document.getElementById('f_settleNote').value = '';
+  showModal('settleModal');
+}
+
+async function submitSettlement() {
+  const body = {
+    date: document.getElementById('f_settleDate').value,
+    amount: document.getElementById('f_settleAmount').value,
+    note: document.getElementById('f_settleNote').value.trim(),
+  };
+  if (!body.date) return showToast('请选择日期', 'error');
+  try {
+    const url = settleType === 'onboard' ? '/onboarding' : '/settlement';
+    await api('POST', '/records/' + settleRecordId + url, body);
+    showToast(settleType === 'onboard' ? '入职已办理' : '结算已办理', 'success');
+    closeModal('settleModal');
+    await loadRecords();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+// ==================== Detail ====================
+function openDetail(id) {
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  const cfg = STATUS_CONFIG[r.status] || { label: r.status, badge: '' };
+  const seeSalary = canSeeSalary();
+  const today = todayStr();
+
+  // Timeline
+  const steps = [
+    { title: '行政登记', desc: r.startDate + ' 登记', done: true },
+    { title: '实操进行中', desc: r.status === 'practicing' ? '预计 ' + r.endDate + ' 结束' : '已于 ' + r.endDate + ' 结束', done: r.status !== 'practicing', current: r.status === 'practicing' },
+    { title: '带教反馈', desc: seeSalary && r.feedback ? (r.feedback.result === 'pass' ? '通过' : '不通过') + ' (' + r.feedback.date + ')' : (r.hasFeedback ? '已反馈' : '待反馈'), done: !!r.feedback || r.hasFeedback, current: r.status === 'feedback_pending' },
+    { title: r.feedback && r.feedback.result === 'pass' ? '办理入职' : '办理结算', desc: seeSalary ? (r.settlement ? '已于 ' + r.settlement.date + ' 办理' : r.onboarding ? '已于 ' + r.onboarding.date + ' 入职' : '人事待处理') : (r.hasSettlement || r.hasOnboarding ? '已办理' : '待处理'), done: r.status === 'settled' || r.status === 'onboarded', current: r.status === 'feedback_done' },
+  ];
+  const timelineHtml = '<div class="timeline">' + steps.map(s =>
+    `<div class="timeline-step ${s.done ? 'done' : ''} ${s.current ? 'current' : ''}"><div class="timeline-dot">${s.done ? '&#x2713;' : s.current ? '&#x25CF;' : ''}</div><div class="timeline-title">${s.title}</div><div class="timeline-desc">${s.desc}</div></div>`
+  ).join('') + '</div>';
+
+  // Basic info
+  let html = '<div class="detail-section"><div class="detail-section-title">基本信息</div><div class="detail-grid">' +
+    '<div class="detail-item"><span class="detail-label">实操人员</span><span class="detail-value">' + r.name + '</span></div>' +
+    '<div class="detail-item"><span class="detail-label">带教人</span><span class="detail-value">' + r.mentor + '</span></div>' +
+    '<div class="detail-item"><span class="detail-label">实操开始日期</span><span class="detail-value">' + r.startDate + '</span></div>' +
+    '<div class="detail-item"><span class="detail-label">实操结束日期</span><span class="detail-value">' + r.endDate + '</span></div>' +
+    '<div class="detail-item"><span class="detail-label">实操天数</span><span class="detail-value">' + r.practiceDays + ' 天</span></div>' +
+    '<div class="detail-item"><span class="detail-label">当前状态</span><span class="detail-value"><span class="badge ' + cfg.badge + '">' + cfg.label + '</span></span></div>' +
+    '<div class="detail-item"><span class="detail-label">设备型号</span><span class="detail-value">' + (r.deviceModel || '—') + '</span></div>' +
+    '<div class="detail-item"><span class="detail-label">序列号</span><span class="detail-value">' + (r.serialNumber || '—') + '</span></div>' +
+    '<div class="detail-item full"><span class="detail-label">配件情况</span><span class="detail-value">' + (r.accessories || '—') + '</span></div>' +
+    (r.remark ? '<div class="detail-item full"><span class="detail-label">备注</span><span class="detail-value" style="font-weight:400;">' + r.remark + '</span></div>' : '') +
+    '</div></div>';
+
+  // Salary (HR/Manager only)
+  if (seeSalary) {
+    if (r.salaryBase || r.salaryStructure) {
+      html += '<div class="detail-section"><div class="detail-section-title">薪资结构（HR登记）</div><div class="salary-struct-box">' +
+        '<div class="label">薪资结构</div><div class="value">' + (r.salaryStructure || '—') + '</div></div>' +
+        '<div class="detail-grid">' +
+        '<div class="detail-item"><span class="detail-label">基本工资</span><span class="detail-value">' + (r.salaryBase || 0) + ' 元/月</span></div>' +
+        '<div class="detail-item"><span class="detail-label">补贴/其他</span><span class="detail-value">' + (r.salaryAllowance || 0) + ' 元/月</span></div>' +
+        (r.salaryNote ? '<div class="detail-item full"><span class="detail-label">薪资备注</span><span class="detail-value" style="font-weight:400;">' + r.salaryNote + '</span></div>' : '') +
+        '</div></div>';
+    } else {
+      html += '<div class="detail-section"><div class="detail-section-title">薪资结构（HR登记）</div><div class="days-text">尚未登记薪资</div></div>';
+    }
+
+    if (r.feedback) {
+      const attHtml = r.feedback.attachmentName
+        ? '<div class="detail-item full"><span class="detail-label">凭证附件</span><span class="detail-value"><a href="' + (r.feedback.attachmentUrl || '/uploads/' + r.feedback.attachmentName) + '" target="_blank" style="color:var(--primary);text-decoration:underline;">' + (r.feedback.attachmentOriginalName || r.feedback.attachmentName) + '</a></span></div>'
+        : '';
+      html += '<div class="detail-section"><div class="detail-section-title">实操反馈</div><div class="detail-grid">' +
+        '<div class="detail-item"><span class="detail-label">反馈结果</span><span class="detail-value">' + (r.feedback.result === 'pass' ? '通过·建议入职' : '不通过·结算离场') + '</span></div>' +
+        '<div class="detail-item"><span class="detail-label">反馈日期</span><span class="detail-value">' + r.feedback.date + '</span></div>' +
+        '<div class="detail-item"><span class="detail-label">出勤天数</span><span class="detail-value">' + (r.feedback.attendanceDays || '—') + ' 天</span></div>' +
+        '<div class="detail-item"><span class="detail-label">迟到/早退</span><span class="detail-value">' + (r.feedback.lateCount || 0) + '/' + (r.feedback.earlyLeaveCount || 0) + ' 次</span></div>' +
+        (r.feedback.note ? '<div class="detail-item full"><span class="detail-label">反馈意见</span><span class="detail-value" style="font-weight:400;">' + r.feedback.note + '</span></div>' : '') +
+        attHtml +
+        '</div></div>';
+    }
+
+    if (r.settlement) {
+      html += '<div class="detail-section"><div class="detail-section-title">结算信息</div><div class="detail-grid">' +
+        '<div class="detail-item"><span class="detail-label">结算日期</span><span class="detail-value">' + r.settlement.date + '</span></div>' +
+        '<div class="detail-item"><span class="detail-label">结算金额</span><span class="detail-value">' + formatMoney(r.settlement.amount) + ' 元</span></div>' +
+        (r.settlement.note ? '<div class="detail-item full"><span class="detail-label">备注</span><span class="detail-value" style="font-weight:400;">' + r.settlement.note + '</span></div>' : '') +
+        '</div></div>';
+    }
+
+    if (r.onboarding) {
+      html += '<div class="detail-section"><div class="detail-section-title">入职信息</div><div class="detail-grid">' +
+        '<div class="detail-item"><span class="detail-label">入职日期</span><span class="detail-value">' + r.onboarding.date + '</span></div>' +
+        '<div class="detail-item"><span class="detail-label">实操结束到入职</span><span class="detail-value">' + (r.onboarding.daysToOnboard >= 0 ? r.onboarding.daysToOnboard + ' 天' : '提前' + Math.abs(r.onboarding.daysToOnboard) + '天') + '</span></div>' +
+        (r.onboarding.note ? '<div class="detail-item full"><span class="detail-label">备注</span><span class="detail-value" style="font-weight:400;">' + r.onboarding.note + '</span></div>' : '') +
+        '</div></div>';
+    }
+  } else {
+    // Admin view - only show status flags
+    let flags = '';
+    if (r.hasSalary) flags += '<div class="detail-item"><span class="detail-label">薪资结构</span><span class="detail-value" style="color:var(--green);">已登记</span></div>';
+    else flags += '<div class="detail-item"><span class="detail-label">薪资结构</span><span class="detail-value days-text">待HR登记</span></div>';
+    if (r.hasFeedback) flags += '<div class="detail-item"><span class="detail-label">实操反馈</span><span class="detail-value" style="color:var(--green);">已反馈</span></div>';
+    if (r.hasSettlement) flags += '<div class="detail-item"><span class="detail-label">结算</span><span class="detail-value" style="color:var(--green);">已结算</span></div>';
+    if (r.hasOnboarding) flags += '<div class="detail-item"><span class="detail-label">入职</span><span class="detail-value" style="color:var(--green);">已入职</span></div>';
+    html += '<div class="detail-section"><div class="detail-section-title">流程进度</div><div class="detail-grid">' + flags + '</div></div>';
+  }
+
+  html = timelineHtml + html;
+  document.getElementById('detailBody').innerHTML = html;
+
+  // Footer
+  let footer = '<button class="btn btn-default" onclick="closeModal(\'detailModal\')">关闭</button>';
+  if (canEdit()) {
+    footer += '<button class="btn btn-default" onclick="closeModal(\'detailModal\');openRegisterModal(\'' + r.id + '\')">编辑</button>';
+  }
+  if (isHR()) {
+    if (r.status === 'practicing' || r.status === 'feedback_pending') {
+      footer += '<button class="btn btn-primary" onclick="closeModal(\'detailModal\');openFeedback(\'' + r.id + '\')">填写反馈</button>';
+    } else if (r.status === 'feedback_done') {
+      if (r.feedback && r.feedback.result === 'pass') {
+        footer += '<button class="btn btn-primary" onclick="closeModal(\'detailModal\');openSettlement(\'' + r.id + '\',\'onboard\')">办理入职</button>';
+      } else {
+        footer += '<button class="btn btn-primary" onclick="closeModal(\'detailModal\');openSettlement(\'' + r.id + '\',\'settle\')">办理结算</button>';
+      }
+    }
+  }
+  document.getElementById('detailFooter').innerHTML = footer;
+  showModal('detailModal');
+}
+
+// ==================== Delete ====================
+async function deleteRecord(id) {
+  if (!confirm('确认删除该记录？此操作不可撤销。')) return;
+  try {
+    await api('DELETE', '/records/' + id);
+    showToast('已删除', 'success');
+    await loadRecords();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+// ==================== Accounts ====================
+async function openAccountsModal() {
+  try {
+    const data = await api('GET', '/auth/accounts');
+    accounts = data.accounts;
+    const roleColors = { admin: 'var(--blue)', hr: 'var(--green)', manager: '#92400e' };
+    document.getElementById('accountsList').innerHTML = accounts.map(a =>
+      '<div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);">' +
+      '<div><span style="font-weight:500;">' + a.name + '</span> <span class="days-text">(' + a.username + ')</span> <span class="badge" style="background:var(--gray-light);color:' + roleColors[a.role] + ';">' + ROLE_LABELS[a.role] + '</span>' + (a.wecom ? ' <span class="days-text">企微:' + a.wecom + '</span>' : '') + (!a.active ? ' <span class="badge badge-red">已停用</span>' : '') + '</div>' +
+      (isManager() && a.username !== 'manager' ? '<button class="btn-text btn-sm btn-danger-text" onclick="deleteAccount(\'' + a.id + '\')">删除</button>' : '') +
+      '</div>'
+    ).join('');
+    showModal('accountsModal');
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function createAccount() {
+  const body = {
+    username: document.getElementById('acc_username').value.trim(),
+    password: document.getElementById('acc_password').value.trim(),
+    name: document.getElementById('acc_name').value.trim(),
+    wecom: document.getElementById('acc_wecom').value.trim(),
+    role: document.getElementById('acc_role').value,
+  };
+  if (!body.username || !body.password || !body.name) return showToast('用户名、密码、姓名必填', 'error');
+  try {
+    await api('POST', '/auth/accounts', body);
+    showToast('账号已创建', 'success');
+    ['acc_username','acc_password','acc_name','acc_wecom'].forEach(id => document.getElementById(id).value = '');
+    await openAccountsModal();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function deleteAccount(id) {
+  if (!confirm('确认删除该账号？')) return;
+  try {
+    await api('DELETE', '/auth/accounts/' + id);
+    showToast('账号已删除', 'success');
+    await openAccountsModal();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+// ==================== Logs ====================
+async function openLogsModal() {
+  try {
+    const data = await api('GET', '/auth/logs');
+    const logs = data.logs;
+    document.getElementById('logsBody').innerHTML = logs.length === 0
+      ? '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-tertiary);">暂无日志</td></tr>'
+      : logs.map(l => '<tr>' +
+        '<td>' + l.username + '</td>' +
+        '<td>' + l.name + '</td>' +
+        '<td>' + ROLE_LABELS[l.role] + '</td>' +
+        '<td>' + (l.deviceModel || '—') + '</td>' +
+        '<td>' + (l.accessories || '—') + '</td>' +
+        '<td>' + (l.serialNumber || '—') + '</td>' +
+        '<td>' + formatTime(l.loginTime) + '</td>' +
+        '</tr>'
+      ).join('');
+    showModal('logsModal');
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+// ==================== Export ====================
+function exportCSV() {
+  if (records.length === 0) return showToast('暂无数据', 'error');
+  const seeSalary = canSeeSalary();
+  let headers = ['实操人员', '带教人', '开始日期', '结束日期', '天数', '设备型号', '配件', '序列号', '状态'];
+  if (seeSalary) headers = headers.concat(['薪资结构', '基本工资', '补贴', '反馈结果', '反馈日期', '结算日期', '结算金额', '入职日期', '入职耗时(天)']);
+
+  const rows = records.map(r => {
+    const cfg = STATUS_CONFIG[r.status] || { label: r.status };
+    let row = [r.name, r.mentor, r.startDate, r.endDate, r.practiceDays, r.deviceModel, r.accessories, r.serialNumber, cfg.label];
+    if (seeSalary) {
+      row = row.concat([
+        r.salaryStructure || '',
+        r.salaryBase || '',
+        r.salaryAllowance || '',
+        r.feedback ? (r.feedback.result === 'pass' ? '通过' : '不通过') : '',
+        r.feedback ? r.feedback.date : '',
+        r.settlement ? r.settlement.date : '',
+        r.settlement ? r.settlement.amount : '',
+        r.onboarding ? r.onboarding.date : '',
+        r.onboarding ? r.onboarding.daysToOnboard : '',
+      ]);
+    }
+    return row;
+  });
+
+  let csv = '\uFEFF' + headers.join(',') + '\n';
+  rows.forEach(row => {
+    csv += row.map(c => {
+      const s = String(c);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    }).join(',') + '\n';
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = '实操台账_' + todayStr() + '.csv';
+  link.click();
+  URL.revokeObjectURL(link.href);
+  showToast('已导出', 'success');
+}
+
+// ==================== Questionnaire ====================
+let questionnaires = [];
+let importingQId = null;
+
+async function openQuestionnaireModal() {
+  try {
+    const data = await api('GET', '/questionnaire');
+    questionnaires = data.questionnaires;
+    renderQuestionnaires();
+    showModal('questionnaireModal');
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function renderQuestionnaires() {
+  const pending = questionnaires.filter(q => q.status === 'pending');
+  const imported = questionnaires.filter(q => q.status === 'imported');
+
+  let html = '';
+
+  if (pending.length > 0) {
+    html += '<div style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--orange);">待处理 (' + pending.length + ')</div>';
+    html += pending.map(q => renderQCard(q, true)).join('');
+  }
+
+  if (imported.length > 0) {
+    html += '<div style="font-size:14px;font-weight:600;margin:20px 0 12px;color:var(--green);">已导入 (' + imported.length + ')</div>';
+    html += imported.slice(0, 10).map(q => renderQCard(q, false)).join('');
+  }
+
+  if (pending.length === 0 && imported.length === 0) {
+    html = '<div class="empty-state"><div class="icon">📋</div>暂无问卷需求<br><a href="/questionnaire" target="_blank" style="color:var(--primary);font-size:13px;">问卷表单地址</a></div>';
+  }
+
+  document.getElementById('questionnaireBody').innerHTML = html;
+}
+
+function renderQCard(q, isPending) {
+  const roleColors = { manager: 'var(--blue)', leader: 'var(--green)', employee: '#92400e' };
+  const time = new Date(q.createdAt);
+  const timeStr = time.getFullYear() + '-' + String(time.getMonth()+1).padStart(2,'0') + '-' + String(time.getDate()).padStart(2,'0') + ' ' + String(time.getHours()).padStart(2,'0') + ':' + String(time.getMinutes()).padStart(2,'0');
+
+  let actions = '';
+  if (isPending) {
+    if (canEdit()) {
+      actions = '<button class="btn btn-primary btn-sm" onclick="openImportModal(\'' + q.id + '\')">导入登记</button>' +
+                '<button class="btn btn-default btn-sm" onclick="dismissQuestionnaire(\'' + q.id + '\')">忽略</button>';
+    }
+  } else {
+    actions = '<span class="badge badge-onboarded">已导入</span>';
+    if (q.importedRecordId) {
+      actions += ' <button class="btn-text btn-sm" onclick="closeModal(\'questionnaireModal\');openDetail(\'' + q.importedRecordId + '\')">查看记录</button>';
+    }
+  }
+
+  return '<div style="border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; margin-bottom:10px;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">' +
+      '<div><span style="font-weight:600;font-size:14px;">' + q.personName + '</span>' +
+      ' <span class="badge" style="background:var(--gray-light);color:' + (roleColors[q.submitterRole]||'var(--gray)') + ';font-size:11px;">' + q.submitterRoleLabel + '</span></div>' +
+      '<span class="days-text">' + timeStr + '</span>' +
+    '</div>' +
+    '<div style="font-size:13px;color:var(--text-secondary);line-height:1.8;">' +
+      '提交人：' + q.submitterName + ' · 带教人：' + q.mentorName + '<br>' +
+      '期望开始：' + q.expectStart + '（' + q.expectDays + '天）' +
+      (q.businessArea ? ' · 业务：' + q.businessArea : '') + '<br>' +
+      (q.deviceNeed ? '设备需求：' + q.deviceNeed : '') +
+      (q.remark ? '<br>备注：' + q.remark : '') +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">' + actions + '</div>' +
+  '</div>';
+}
+
+function openImportModal(qId) {
+  const q = questionnaires.find(x => x.id === qId);
+  if (!q) return;
+  importingQId = qId;
+
+  document.getElementById('importSourceInfo').innerHTML =
+    '<strong>问卷来源</strong><br>' +
+    '提交人：' + q.submitterName + '（' + q.submitterRoleLabel + '） · 实操人员：' + q.personName +
+    ' · 带教人：' + q.mentorName + ' · 期望开始：' + q.expectStart + '（' + q.expectDays + '天）';
+
+  document.getElementById('imp_name').value = q.personName;
+  document.getElementById('imp_mentor').value = q.mentorName;
+  document.getElementById('imp_startDate').value = q.expectStart;
+  document.getElementById('imp_days').value = q.expectDays;
+  document.getElementById('imp_deviceModel').value = q.deviceNeed || '';
+  document.getElementById('imp_serialNumber').value = '';
+  document.getElementById('imp_accessories').value = '';
+  document.getElementById('imp_remark').value = q.remark || '';
+
+  closeModal('questionnaireModal');
+  showModal('importModal');
+}
+
+async function confirmImport() {
+  const body = {
+    name: document.getElementById('imp_name').value.trim(),
+    mentor: document.getElementById('imp_mentor').value.trim(),
+    startDate: document.getElementById('imp_startDate').value,
+    practiceDays: parseInt(document.getElementById('imp_days').value),
+    deviceModel: document.getElementById('imp_deviceModel').value.trim(),
+    serialNumber: document.getElementById('imp_serialNumber').value.trim(),
+    accessories: document.getElementById('imp_accessories').value.trim(),
+    remark: document.getElementById('imp_remark').value.trim(),
+  };
+  if (!body.name) return showToast('请填写实操人员姓名', 'error');
+  if (!body.mentor) return showToast('请填写带教人', 'error');
+  if (!body.practiceDays || body.practiceDays < 1) return showToast('请填写有效的实操天数', 'error');
+  if (!body.startDate) return showToast('请选择开始日期', 'error');
+
+  try {
+    await api('POST', '/questionnaire/' + importingQId + '/import', body);
+    showToast('已导入并登记成功', 'success');
+    closeModal('importModal');
+    await loadRecords();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function dismissQuestionnaire(qId) {
+  if (!confirm('确认忽略此问卷需求？')) return;
+  try {
+    await api('DELETE', '/questionnaire/' + qId);
+    showToast('已忽略', 'success');
+    await openQuestionnaireModal();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+// ==================== Practice Days Warning ====================
+function checkPracticeDays(input, warnId) {
+  const warn = document.getElementById(warnId);
+  if (!warn) return;
+  const days = parseInt(input.value);
+  if (days > 7) {
+    warn.style.display = 'block';
+  } else {
+    warn.style.display = 'none';
+  }
+}
+
+// ==================== Utils ====================
+function showModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type || '');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function daysBetween(d1, d2) { return Math.round((new Date(d2) - new Date(d1)) / 86400000); }
+function formatMoney(n) { return (n || 0).toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+function formatTime(iso) {
+  const d = new Date(iso);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+// Enter key to login
+document.getElementById('loginPwd').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('loginUser').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPwd').focus(); });
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('show'); });
+});
+
+// ==================== Init ====================
+async function init() {
+  if (token) {
+    try {
+      const data = await api('GET', '/auth/me');
+      currentUser = data.user;
+      await showApp();
+    } catch (e) {
+      logout();
+    }
+  } else {
+    document.getElementById('loginPage').style.display = 'flex';
+  }
+}
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HR本地薪资管理工具</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --primary: #378add; --primary-dark: #185fa5;
+    --bg: #f5f6fa; --card: #fff; --border: #e8e8e8;
+    --text: #1a1a2e; --text-2: #666; --text-3: #999;
+    --green: #1a9e75; --red: #e24b4a; --orange: #ef9f27; --purple: #7f77dd;
+    --radius: 10px;
+  }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
+  .hidden { display:none !important; }
+
+  /* Config & Login */
+  .auth-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .auth-card { background:var(--card); border-radius:16px; box-shadow:0 4px 24px rgba(0,0,0,.08); max-width:420px; width:100%; padding:40px; }
+  .auth-card h1 { font-size:22px; font-weight:600; text-align:center; margin-bottom:6px; }
+  .auth-card .sub { font-size:13px; color:var(--text-3); text-align:center; margin-bottom:28px; }
+  .auth-card .icon { width:56px; height:56px; border-radius:50%; background:#faeeda; display:flex; align-items:center; justify-content:center; font-size:28px; margin:0 auto 16px; }
+  .form-group { margin-bottom:16px; }
+  .form-label { display:block; font-size:13px; font-weight:500; margin-bottom:6px; }
+  .form-input { width:100%; border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:14px; font-family:inherit; }
+  .form-input:focus { outline:none; border-color:var(--primary); }
+  .btn { padding:12px 20px; border:none; border-radius:8px; font-size:14px; font-weight:500; cursor:pointer; transition:all .2s; }
+  .btn-primary { background:var(--primary); color:#fff; width:100%; }
+  .btn-primary:hover { background:var(--primary-dark); }
+  .btn-default { background:#f0f0f0; color:var(--text); }
+  .btn-text { background:none; border:none; color:var(--primary); cursor:pointer; font-size:13px; padding:4px 8px; }
+  .btn-danger-text { color:var(--red); }
+  .warn-box { background:#fff3e0; border:1px solid #ffe0b2; border-radius:8px; padding:12px; font-size:12px; color:#8a6d3b; margin-bottom:16px; line-height:1.5; }
+
+  /* Header */
+  .header { background:var(--card); border-bottom:1px solid var(--border); padding:14px 24px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; }
+  .header-left { display:flex; align-items:center; gap:12px; }
+  .header-title { font-size:18px; font-weight:600; }
+  .header-badge { background:#faeeda; color:#854f0b; font-size:11px; padding:3px 8px; border-radius:4px; font-weight:500; }
+  .header-right { display:flex; align-items:center; gap:10px; }
+  .role-tag { font-size:12px; color:var(--text-2); }
+
+  /* Stats */
+  .stats { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; padding:20px 24px; }
+  .stat-card { background:var(--card); border-radius:var(--radius); padding:16px; border:1px solid var(--border); }
+  .stat-label { font-size:12px; color:var(--text-3); margin-bottom:4px; }
+  .stat-value { font-size:24px; font-weight:600; }
+  .stat-value.red { color:var(--red); }
+  .stat-value.orange { color:var(--orange); }
+  .stat-value.green { color:var(--green); }
+
+  /* Toolbar */
+  .toolbar { padding:0 24px 12px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .filter-tabs { display:flex; gap:6px; flex-wrap:wrap; }
+  .filter-tab { padding:6px 14px; border-radius:20px; font-size:13px; cursor:pointer; border:1px solid var(--border); background:var(--card); color:var(--text-2); transition:all .2s; }
+  .filter-tab.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .filter-tab .count { font-size:11px; opacity:.7; margin-left:4px; }
+  .search-box { flex:1; min-width:200px; }
+  .search-box input { width:100%; border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:13px; }
+
+  /* Table */
+  .table-wrap { padding:0 24px 24px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; background:var(--card); border-radius:var(--radius); overflow:hidden; }
+  th { background:#f8f9fb; font-size:12px; font-weight:500; color:var(--text-2); padding:12px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap; }
+  td { padding:12px; font-size:13px; border-bottom:1px solid var(--border); vertical-align:top; }
+  tr:hover { background:#fafbfc; }
+  .badge { display:inline-block; padding:3px 10px; border-radius:4px; font-size:12px; font-weight:500; }
+  .badge-blue { background:#e6f1fb; color:#185fa5; }
+  .badge-orange { background:#faeeda; color:#854f0b; }
+  .badge-purple { background:#eeedfe; color:#534ab7; }
+  .badge-green { background:#e1f5ee; color:#085041; }
+  .badge-gray { background:#f0f0f0; color:#666; }
+  .badge-red { background:#fcebeb; color:#a32d2d; }
+  .salary-tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; cursor:pointer; }
+  .salary-tag.done { background:#e1f5ee; color:#085041; }
+  .salary-tag.pending { background:#fcebeb; color:#a32d2d; }
+
+  /* Modal */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:center; justify-content:center; z-index:1000; }
+  .modal-overlay.show { display:flex; }
+  .modal { background:var(--card); border-radius:16px; max-width:560px; width:90%; max-height:85vh; overflow-y:auto; }
+  .modal-header { padding:20px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  .modal-title { font-size:16px; font-weight:600; }
+  .modal-close { background:none; border:none; font-size:20px; cursor:pointer; color:var(--text-3); }
+  .modal-body { padding:24px; }
+  .modal-footer { padding:16px 24px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:10px; }
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .form-group.full { grid-column:1/-1; }
+  .info-banner { background:#f8f9fb; border-radius:8px; padding:14px; margin-bottom:20px; font-size:13px; color:var(--text-2); line-height:1.6; }
+
+  /* Toast */
+  .toast { position:fixed; top:20px; right:20px; padding:12px 20px; border-radius:8px; font-size:14px; z-index:2000; animation:slideIn .3s; }
+  .toast.success { background:var(--green); color:#fff; }
+  .toast.error { background:var(--red); color:#fff; }
+  @keyframes slideIn { from { transform:translateX(100%); } to { transform:translateX(0); } }
+
+  .empty { text-align:center; padding:60px 20px; color:var(--text-3); }
+  .footer-note { padding:12px 24px; font-size:11px; color:var(--text-3); text-align:center; }
+</style>
+</head>
+<body>
+
+<!-- Config Screen -->
+<div class="auth-wrap" id="configScreen">
+  <div class="auth-card">
+    <div class="icon">⚙️</div>
+    <h1>HR本地工具</h1>
+    <p class="sub">请输入云端服务地址</p>
+    <div class="form-group">
+      <label class="form-label">云端服务URL</label>
+      <input type="url" class="form-input" id="cloudUrlInput" placeholder="本地测试填 http://localhost:3000，部署后填 Render 地址" value="">
+    </div>
+    <div class="warn-box">薪资数据仅存储在本机浏览器中，不会上传到云端。请确保使用固定的办公电脑。</div>
+    <button class="btn btn-primary" onclick="saveCloudUrl()">连接</button>
+  </div>
+</div>
+
+<!-- Login Screen -->
+<div class="auth-wrap hidden" id="loginScreen">
+  <div class="auth-card">
+    <div class="icon">🔐</div>
+    <h1>HR登录</h1>
+    <p class="sub" id="loginCloudLabel">连接到云端服务</p>
+    <div class="form-group">
+      <label class="form-label">用户名</label>
+      <input type="text" class="form-input" id="loginUser" placeholder="hr" value="hr">
+    </div>
+    <div class="form-group">
+      <label class="form-label">密码</label>
+      <input type="password" class="form-input" id="loginPwd" placeholder="请输入密码">
+    </div>
+    <div class="form-group">
+      <label class="form-label">本地加密口令 <span style="font-size:11px;color:#999;">（保护本地薪资数据）</span></label>
+      <input type="password" class="form-input" id="localPwd" placeholder="设置本地数据加密口令">
+    </div>
+    <button class="btn btn-primary" onclick="doLogin()">登录</button>
+    <div style="text-align:center;margin-top:12px;">
+      <button class="btn-text" onclick="resetConfig()">重新配置地址</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main App -->
+<div class="hidden" id="mainApp">
+  <div class="header">
+    <div class="header-left">
+      <div class="header-title">HR薪资管理后台</div>
+      <div class="header-badge">本地模式 · 薪资不上云</div>
+    </div>
+    <div class="header-right">
+      <span class="role-tag" id="userTag"></span>
+      <button class="btn btn-default" onclick="exportLocalData()">导出数据</button>
+      <button class="btn btn-default" onclick="logout()">退出</button>
+    </div>
+  </div>
+
+  <div class="stats" id="statsBar"></div>
+
+  <div class="toolbar">
+    <div class="filter-tabs" id="filterTabs"></div>
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="搜索姓名或带教人..." oninput="renderTable()">
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th>实操人员</th>
+          <th>带教人</th>
+          <th>实操周期</th>
+          <th>状态</th>
+          <th>薪资</th>
+          <th>反馈结果</th>
+          <th>结算/入职</th>
+          <th style="text-align:right;">操作</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="footer-note">薪资数据存储在本机 localStorage，清除浏览器数据将导致丢失，请定期导出备份。</div>
+</div>
+
+<!-- Salary Modal -->
+<div class="modal-overlay" id="salaryModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="salaryModalTitle">登记薪资</div>
+      <button class="modal-close" onclick="closeModal('salaryModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-banner" id="salaryPersonInfo"></div>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label class="form-label">薪资结构描述</label>
+          <input type="text" class="form-input" id="f_salaryStructure" placeholder="如：基本工资+绩效+补贴">
+        </div>
+        <div class="form-group">
+          <label class="form-label">基本工资（元/月）</label>
+          <input type="number" class="form-input" id="f_salaryBase" placeholder="0" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">补贴/其他（元/月）</label>
+          <input type="number" class="form-input" id="f_salaryAllowance" placeholder="0" min="0">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">薪资备注</label>
+          <input type="text" class="form-input" id="f_salaryNote" placeholder="试用期比例、特殊约定等">
+        </div>
+      </div>
+      <div id="salaryPreview" style="margin-top:16px;padding:12px;background:#f8f9fb;border-radius:8px;font-size:13px;color:var(--text-2);"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('salaryModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveSalary()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settlement Modal -->
+<div class="modal-overlay" id="settleModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="settleModalTitle">办理结算</div>
+      <button class="modal-close" onclick="closeModal('settleModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-banner" id="settlePersonInfo"></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">结算日期</label>
+          <input type="date" class="form-input" id="f_settleDate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">结算金额（元）</label>
+          <input type="number" class="form-input" id="f_settleAmount" placeholder="自动计算或手动填写" min="0">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">备注</label>
+          <input type="text" class="form-input" id="f_settleNote" placeholder="可选">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('settleModal')">取消</button>
+      <button class="btn btn-primary" onclick="submitSettlement()">确认办理</button>
+    </div>
+  </div>
+</div>
+
+<!-- Onboarding Modal -->
+<div class="modal-overlay" id="onboardModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">办理正式入职</div>
+      <button class="modal-close" onclick="closeModal('onboardModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="info-banner" id="onboardPersonInfo"></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">入职日期</label>
+          <input type="date" class="form-input" id="f_onboardDate">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">备注</label>
+          <input type="text" class="form-input" id="f_onboardNote" placeholder="可选">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('onboardModal')">取消</button>
+      <button class="btn btn-primary" onclick="submitOnboarding()">确认办理</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const LOCAL_KEY = 'hr_local_data_v1';
+let cloudUrl = '';
+let jwtToken = '';
+let currentUser = null;
+let records = [];
+let salaryMap = {};
+let currentFilter = 'all';
+let salaryEditId = null;
+let settleId = null;
+let onboardId = null;
+
+const STATUS_CONFIG = {
+  practicing: { label: '实操中', badge: 'badge-blue' },
+  feedback_pending: { label: '待反馈', badge: 'badge-orange' },
+  feedback_done: { label: '已反馈', badge: 'badge-purple' },
+  settled: { label: '已结算', badge: 'badge-gray' },
+  onboarded: { label: '已入职', badge: 'badge-green' }
+};
+
+function loadLocal() {
+  try {
+    const raw = localStorage.getItem(LOCAL_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      cloudUrl = d.cloudUrl || '';
+      jwtToken = d.jwtToken || '';
+      currentUser = d.currentUser || null;
+      salaryMap = d.salaryMap || {};
+    }
+  } catch(e) { console.error('Load local error:', e); }
+}
+
+function saveLocal() {
+  localStorage.setItem(LOCAL_KEY, JSON.stringify({
+    cloudUrl, jwtToken, currentUser, salaryMap
+  }));
+}
+
+function showToast(msg, type) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type || 'success');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+function showModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function formatMoney(n) { return parseFloat(n || 0).toLocaleString('zh-CN') + ' 元'; }
+
+async function api(path, method, body) {
+  const opts = { method: method || 'GET', headers: {} };
+  if (jwtToken) opts.headers['Authorization'] = 'Bearer ' + jwtToken;
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const res = await fetch(cloudUrl + '/api' + path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'API error');
+  return data;
+}
+
+function saveCloudUrl() {
+  const url = document.getElementById('cloudUrlInput').value.trim().replace(/\/$/, '');
+  if (!url) return showToast('请输入云端服务URL', 'error');
+  cloudUrl = url;
+  saveLocal();
+  showLogin();
+}
+
+function showLogin() {
+  document.getElementById('configScreen').classList.add('hidden');
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('loginCloudLabel').textContent = '连接到 ' + cloudUrl;
+  document.getElementById('loginPwd').focus();
+}
+
+function resetConfig() {
+  localStorage.removeItem(LOCAL_KEY);
+  location.reload();
+}
+
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPwd').value;
+  const localPwd = document.getElementById('localPwd').value;
+
+  if (!username || !password) return showToast('请输入账号密码', 'error');
+  if (!localPwd) return showToast('请设置本地加密口令', 'error');
+
+  try {
+    const data = await api('/auth/login', 'POST', {
+      username, password,
+      deviceModel: navigator.userAgent.slice(0, 80),
+      accessories: 'HR本地工具',
+      serialNumber: localPwd
+    });
+    jwtToken = data.token;
+    currentUser = data.user;
+    saveLocal();
+    showMainApp();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function showMainApp() {
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('configScreen').classList.add('hidden');
+  document.getElementById('mainApp').classList.remove('hidden');
+  document.getElementById('userTag').textContent = currentUser.name + ' (' + currentUser.role + ')';
+  refreshData();
+}
+
+async function refreshData() {
+  try {
+    const data = await api('/records');
+    records = data.records || [];
+    renderStats();
+    renderFilters();
+    renderTable();
+  } catch(e) {
+    showToast('加载数据失败: ' + e.message, 'error');
+    if (e.message.includes('token') || e.message.includes('auth')) {
+      logout();
+    }
+  }
+}
+
+function renderStats() {
+  const stats = { total: records.length, practicing: 0, pending: 0, done: 0, settled: 0, onboarded: 0, noSalary: 0 };
+  records.forEach(r => {
+    if (r.status === 'practicing') stats.practicing++;
+    if (r.status === 'feedback_pending') stats.pending++;
+    if (r.status === 'feedback_done') stats.done++;
+    if (r.status === 'settled') stats.settled++;
+    if (r.status === 'onboarded') stats.onboarded++;
+    if (!salaryMap[r.id]) stats.noSalary++;
+  });
+
+  document.getElementById('statsBar').innerHTML = `
+    <div class="stat-card"><div class="stat-label">总人数</div><div class="stat-value">${stats.total}</div></div>
+    <div class="stat-card"><div class="stat-label">实操中</div><div class="stat-value">${stats.practicing}</div></div>
+    <div class="stat-card"><div class="stat-label">待反馈</div><div class="stat-value orange">${stats.pending}</div></div>
+    <div class="stat-card"><div class="stat-label">已反馈</div><div class="stat-value">${stats.done}</div></div>
+    <div class="stat-card"><div class="stat-label">已入职</div><div class="stat-value green">${stats.onboarded}</div></div>
+    <div class="stat-card"><div class="stat-label">未登记薪资</div><div class="stat-value red">${stats.noSalary}</div></div>
+  `;
+}
+
+function renderFilters() {
+  const counts = { all: records.length, practicing: 0, pending: 0, done: 0, settled: 0, onboarded: 0, noSalary: 0 };
+  records.forEach(r => {
+    if (counts[r.status] !== undefined) counts[r.status]++;
+    if (!salaryMap[r.id]) counts.noSalary++;
+  });
+
+  const tabs = [
+    ['all', '全部', counts.all],
+    ['practicing', '实操中', counts.practicing],
+    ['feedback_pending', '待反馈', counts.pending],
+    ['feedback_done', '已反馈', counts.done],
+    ['onboarded', '已入职', counts.onboarded],
+    ['noSalary', '未登记薪资', counts.noSalary]
+  ];
+
+  document.getElementById('filterTabs').innerHTML = tabs.map(([key, label, count]) =>
+    `<div class="filter-tab ${currentFilter === key ? 'active' : ''}" onclick="setFilter('${key}')">${label} <span class="count">${count}</span></div>`
+  ).join('');
+}
+
+function setFilter(f) { currentFilter = f; renderFilters(); renderTable(); }
+
+function renderTable() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  let list = records.filter(r => {
+    if (currentFilter === 'noSalary') return !salaryMap[r.id];
+    if (currentFilter !== 'all' && r.status !== currentFilter) return false;
+    if (search && !r.name.toLowerCase().includes(search) && !r.mentor.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  if (list.length === 0) {
+    document.getElementById('tableBody').innerHTML = '<tr><td colspan="8" class="empty">暂无数据</td></tr>';
+    return;
+  }
+
+  document.getElementById('tableBody').innerHTML = list.map(r => {
+    const cfg = STATUS_CONFIG[r.status] || { label: r.status, badge: 'badge-gray' };
+    const sal = salaryMap[r.id];
+    const salTag = sal
+      ? `<span class="salary-tag done" onclick="openSalaryModal('${r.id}')">${formatMoney(sal.salaryBase + sal.salaryAllowance)}/月</span>`
+      : `<span class="salary-tag pending" onclick="openSalaryModal('${r.id}')">待登记</span>`;
+
+    let feedbackCell = '—';
+    if (r.feedback) {
+      const icon = r.feedback.result === 'pass' ? '✅' : '❌';
+      feedbackCell = `${icon} ${r.feedback.result === 'pass' ? '通过' : '不通过'}<br><span style="font-size:11px;color:var(--text-3);">出勤${r.feedback.attendanceDays}天</span>`;
+    }
+
+    let settleCell = '—';
+    if (r.settlement) {
+      const amt = sal && sal.settlementAmount ? formatMoney(sal.settlementAmount) : '未填金额';
+      settleCell = `结算 ${r.settlement.date}<br><span style="font-size:11px;color:var(--text-3);">${amt}</span>`;
+    } else if (r.onboarding) {
+      settleCell = `入职 ${r.onboarding.date}<br><span style="font-size:11px;color:var(--text-3);">${r.onboarding.daysToOnboard}天办结</span>`;
+    }
+
+    let actions = '';
+    actions += `<button class="btn-text" onclick="openSalaryModal('${r.id}')">${sal ? '改薪资' : '登记薪资'}</button>`;
+    if (r.status === 'feedback_done') {
+      if (r.feedback && r.feedback.result === 'pass') {
+        actions += `<button class="btn-text" onclick="openOnboardModal('${r.id}')">办入职</button>`;
+      } else {
+        actions += `<button class="btn-text" onclick="openSettleModal('${r.id}')">办结算</button>`;
+      }
+    }
+
+    return `<tr>
+      <td><strong>${r.name}</strong></td>
+      <td>${r.mentor}</td>
+      <td style="font-size:12px;">${r.startDate} ~ ${r.endDate}<br><span style="color:var(--text-3);">${r.practiceDays}天</span></td>
+      <td><span class="badge ${cfg.badge}">${cfg.label}</span></td>
+      <td>${salTag}</td>
+      <td>${feedbackCell}</td>
+      <td style="font-size:12px;">${settleCell}</td>
+      <td style="text-align:right;white-space:nowrap;">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openSalaryModal(id) {
+  salaryEditId = id;
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  const sal = salaryMap[id] || {};
+
+  document.getElementById('salaryModalTitle').textContent = sal.salaryBase ? '修改薪资' : '登记薪资';
+  document.getElementById('salaryPersonInfo').innerHTML =
+    `<strong>${r.name}</strong> · 带教人：${r.mentor} · 实操周期：${r.startDate} ~ ${r.endDate}（${r.practiceDays}天）`;
+  document.getElementById('f_salaryStructure').value = sal.salaryStructure || '';
+  document.getElementById('f_salaryBase').value = sal.salaryBase || '';
+  document.getElementById('f_salaryAllowance').value = sal.salaryAllowance || '';
+  document.getElementById('f_salaryNote').value = sal.salaryNote || '';
+  updateSalaryPreview();
+  showModal('salaryModal');
+}
+
+function updateSalaryPreview() {
+  const base = parseFloat(document.getElementById('f_salaryBase').value) || 0;
+  const allow = parseFloat(document.getElementById('f_salaryAllowance').value) || 0;
+  const total = base + allow;
+  const r = records.find(x => x.id === salaryEditId);
+  if (r && total > 0) {
+    document.getElementById('salaryPreview').innerHTML =
+      `月薪合计：${formatMoney(total)} · 实操${r.practiceDays}天预计薪资：${formatMoney(Math.round(total / 30 * r.practiceDays))}`;
+  } else {
+    document.getElementById('salaryPreview').textContent = '';
+  }
+}
+
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'f_salaryBase' || e.target.id === 'f_salaryAllowance') updateSalaryPreview();
+});
+
+function saveSalary() {
+  const r = records.find(x => x.id === salaryEditId);
+  if (!r) return;
+  salaryMap[salaryEditId] = {
+    salaryStructure: document.getElementById('f_salaryStructure').value.trim(),
+    salaryBase: parseFloat(document.getElementById('f_salaryBase').value) || 0,
+    salaryAllowance: parseFloat(document.getElementById('f_salaryAllowance').value) || 0,
+    salaryNote: document.getElementById('f_salaryNote').value.trim(),
+    updatedAt: new Date().toISOString()
+  };
+  saveLocal();
+  closeModal('salaryModal');
+  showToast('薪资已保存（仅本地）', 'success');
+  renderStats();
+  renderFilters();
+  renderTable();
+}
+
+function openSettleModal(id) {
+  settleId = id;
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  const sal = salaryMap[id];
+
+  if (!sal || !sal.salaryBase) {
+    return showToast('请先登记薪资再办理结算', 'error');
+  }
+
+  document.getElementById('settlePersonInfo').innerHTML =
+    `<strong>${r.name}</strong> · ${r.startDate} ~ ${r.endDate}（${r.practiceDays}天）<br>薪资：${formatMoney(sal.salaryBase + sal.salaryAllowance)}/月 · 预计合计：${formatMoney(Math.round((sal.salaryBase + sal.salaryAllowance) / 30 * r.practiceDays))}`;
+  document.getElementById('f_settleDate').value = todayStr();
+  document.getElementById('f_settleAmount').value = Math.round((sal.salaryBase + sal.salaryAllowance) / 30 * r.practiceDays);
+  document.getElementById('f_settleNote').value = '';
+  showModal('settleModal');
+}
+
+async function submitSettlement() {
+  const r = records.find(x => x.id === settleId);
+  if (!r) return;
+  const amount = parseFloat(document.getElementById('f_settleAmount').value) || 0;
+  const date = document.getElementById('f_settleDate').value;
+  const note = document.getElementById('f_settleNote').value.trim();
+
+  try {
+    await api('/records/' + settleId + '/settlement', 'POST', { date, note });
+    if (salaryMap[settleId]) {
+      salaryMap[settleId].settlementAmount = amount;
+      salaryMap[settleId].updatedAt = new Date().toISOString();
+      saveLocal();
+    }
+    closeModal('settleModal');
+    showToast('结算已办理', 'success');
+    await refreshData();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function openOnboardModal(id) {
+  onboardId = id;
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  const sal = salaryMap[id];
+  document.getElementById('onboardPersonInfo').innerHTML =
+    `<strong>${r.name}</strong> · 带教人：${r.mentor} · 实操结束：${r.endDate}` +
+    (sal ? `<br>薪资：${formatMoney(sal.salaryBase + sal.salaryAllowance)}/月` : '');
+  document.getElementById('f_onboardDate').value = todayStr();
+  document.getElementById('f_onboardNote').value = '';
+  showModal('onboardModal');
+}
+
+async function submitOnboarding() {
+  const date = document.getElementById('f_onboardDate').value;
+  const note = document.getElementById('f_onboardNote').value.trim();
+  try {
+    await api('/records/' + onboardId + '/onboarding', 'POST', { date, note });
+    closeModal('onboardModal');
+    showToast('入职已办理', 'success');
+    await refreshData();
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+function exportLocalData() {
+  const data = { salaryMap, exportDate: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'HR薪资数据备份_' + todayStr() + '.json';
+  link.click();
+  showToast('数据已导出', 'success');
+}
+
+function logout() {
+  jwtToken = '';
+  saveLocal();
+  document.getElementById('mainApp').classList.add('hidden');
+  showLogin();
+}
+
+// Init
+loadLocal();
+if (cloudUrl && jwtToken && currentUser) {
+  showMainApp();
+} else if (cloudUrl) {
+  showLogin();
+} else {
+  document.getElementById('configScreen').classList.remove('hidden');
+}
+</script>
+</body>
+</html>

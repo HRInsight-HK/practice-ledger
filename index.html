@@ -1,0 +1,1975 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实操台账管理系统</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  :root {
+    --bg: #f0f2f5;
+    --card-bg: #ffffff;
+    --primary: #4f6df5;
+    --primary-light: #eef1ff;
+    --text: #1a1a2e;
+    --text-secondary: #6b7280;
+    --text-tertiary: #9ca3af;
+    --border: #e5e7eb;
+    --border-light: #f0f1f3;
+    --green: #22c55e;
+    --green-bg: #f0fdf4;
+    --orange: #f59e0b;
+    --orange-bg: #fffbeb;
+    --blue: #3b82f6;
+    --blue-bg: #eff6ff;
+    --purple: #8b5cf6;
+    --purple-bg: #f5f3ff;
+    --red: #ef4444;
+    --red-bg: #fef2f2;
+    --gray: #6b7280;
+    --gray-bg: #f9fafb;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ===== Header ===== */
+  .header {
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: var(--shadow);
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--primary), #7c3aed);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 18px; font-weight: 700;
+  }
+  .header-title { font-size: 18px; font-weight: 600; color: var(--text); }
+  .header-subtitle { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .role-switcher {
+    display: inline-flex;
+    background: var(--gray-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 3px;
+    gap: 3px;
+  }
+  .role-switcher button {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .role-switcher button.active {
+    background: var(--card-bg);
+    color: var(--primary);
+    box-shadow: var(--shadow);
+  }
+  .role-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+  .role-badge-admin { background: var(--blue-bg); color: var(--blue); }
+  .role-badge-hr { background: var(--purple-bg); color: var(--purple); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: #fff;
+  }
+  .btn-primary:hover { background: #3b5de7; transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .btn-default {
+    background: var(--card-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-default:hover { background: var(--gray-bg); border-color: #d1d5db; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+  .btn-text {
+    background: transparent;
+    color: var(--primary);
+    padding: 4px 8px;
+    font-size: 13px;
+  }
+  .btn-text:hover { background: var(--primary-light); }
+  .btn-danger-text { color: var(--red); }
+  .btn-danger-text:hover { background: var(--red-bg); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ===== Stats Cards ===== */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    padding: 24px 32px 0;
+  }
+  .stat-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: transform 0.15s ease;
+  }
+  .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .stat-label { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+  .stat-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .stat-value { font-size: 28px; font-weight: 700; color: var(--text); line-height: 1.2; }
+  .stat-card.alert .stat-value { color: var(--red); }
+
+  /* ===== Main Content ===== */
+  .main { padding: 24px 32px 48px; }
+  
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .toolbar-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .toolbar-right { display: flex; align-items: center; gap: 8px; }
+
+  .search-box {
+    position: relative;
+    width: 280px;
+  }
+  .search-box input {
+    width: 100%;
+    padding: 8px 12px 8px 36px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    background: var(--card-bg);
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  .search-box input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,109,245,0.1); }
+  .search-box .search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-tertiary);
+    font-size: 14px;
+  }
+
+  .filter-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--card-bg);
+    padding: 3px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+  }
+  .filter-tab {
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+    border: none;
+    background: transparent;
+    white-space: nowrap;
+  }
+  .filter-tab:hover { color: var(--text); }
+  .filter-tab.active { background: var(--primary); color: #fff; font-weight: 500; }
+  .filter-tab .count { font-size: 11px; opacity: 0.7; margin-left: 2px; }
+
+  /* ===== Table ===== */
+  .table-wrap {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  thead {
+    background: var(--gray-bg);
+  }
+  th {
+    padding: 12px 14px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 14px;
+    font-size: 13px;
+    color: var(--text);
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+  }
+  tbody tr { transition: background 0.1s ease; }
+  tbody tr:hover { background: #fafbfc; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .person-cell { display: flex; align-items: center; gap: 10px; }
+  .avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .person-name { font-weight: 500; }
+
+  /* Status badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+  .badge-green { background: var(--green-bg); color: #15803d; }
+  .badge-green::before { background: var(--green); }
+  .badge-orange { background: var(--orange-bg); color: #b45309; }
+  .badge-orange::before { background: var(--orange); }
+  .badge-blue { background: var(--blue-bg); color: #1d4ed8; }
+  .badge-blue::before { background: var(--blue); }
+  .badge-purple { background: var(--purple-bg); color: #6d28d9; }
+  .badge-purple::before { background: var(--purple); }
+  .badge-gray { background: var(--gray-bg); color: #4b5563; }
+  .badge-gray::before { background: var(--gray); }
+  .badge-red { background: var(--red-bg); color: #b91c1c; }
+  .badge-red::before { background: var(--red); }
+
+  .progress-bar {
+    width: 80px;
+    height: 6px;
+    background: var(--border-light);
+    border-radius: 3px;
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+
+  .action-group { display: flex; gap: 4px; }
+
+  .empty-state {
+    text-align: center;
+    padding: 64px 20px;
+    color: var(--text-tertiary);
+  }
+  .empty-state-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state-text { font-size: 14px; margin-bottom: 16px; }
+
+  .row-alert { background: var(--red-bg) !important; }
+  .row-warning { background: var(--orange-bg) !important; }
+
+  .date-cell { white-space: nowrap; }
+  .date-overdue { color: var(--red); font-weight: 600; }
+  .date-soon { color: var(--orange); font-weight: 600; }
+
+  .hr-only-col { display: none; }
+  body.hr-mode .hr-only-col { display: table-cell; }
+
+  /* ===== Login Screen ===== */
+  .login-overlay {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5000;
+  }
+  .login-overlay.hidden { display: none; }
+  .login-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 40px;
+    width: 380px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .login-logo {
+    width: 56px; height: 56px;
+    background: linear-gradient(135deg, var(--primary), #7c3aed);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 26px; font-weight: 700;
+    margin: 0 auto 16px;
+  }
+  .login-title { text-align: center; font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .login-subtitle { text-align: center; font-size: 13px; color: var(--text-secondary); margin-bottom: 28px; }
+  .login-form-group { margin-bottom: 16px; }
+  .login-form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
+  .login-form-group input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border 0.15s;
+  }
+  .login-form-group input:focus { outline: none; border-color: var(--primary); }
+  .login-btn {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, var(--primary), #7c3aed);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .login-btn:hover { transform: translateY(-1px); }
+  .login-error { color: var(--red); font-size: 13px; text-align: center; margin-top: 12px; display: none; }
+  .login-hint { text-align: center; font-size: 11px; color: var(--text-tertiary); margin-top: 20px; line-height: 1.6; }
+  .device-section { background: var(--gray-bg); border-radius: 10px; padding: 16px; margin: 8px 0 20px; }
+  .device-section-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 12px; }
+
+  /* ===== User badge in header ===== */
+  .user-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    background: var(--gray-bg);
+    border-radius: 20px;
+    font-size: 12px;
+  }
+  .user-badge .avatar-sm {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), #7c3aed);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+  }
+  .nav-link {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 6px;
+  }
+  .nav-link:hover { background: var(--gray-bg); color: var(--text); }
+
+  /* ===== Account & Log table in modal ===== */
+  .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .admin-table th { text-align: left; padding: 10px 12px; background: var(--gray-bg); font-weight: 600; color: var(--text-secondary); font-size: 12px; border-bottom: 1px solid var(--border); }
+  .admin-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-light); }
+  .admin-table tr:hover td { background: var(--gray-bg); }
+
+  /* ===== Modal ===== */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 1000;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 5vh;
+    animation: fadeIn 0.15s ease;
+  }
+  .modal-overlay.show { display: flex; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  
+  .modal {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    width: 560px;
+    max-width: 92vw;
+    max-height: 88vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.2s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  
+  .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .modal-title { font-size: 17px; font-weight: 600; }
+  .modal-close {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    border: none;
+    background: transparent;
+    font-size: 18px;
+  }
+  .modal-close:hover { background: var(--gray-bg); }
+  
+  .modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  /* Form */
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .form-label .req { color: var(--red); }
+  .form-label .hint { color: var(--text-tertiary); font-weight: 400; font-size: 12px; }
+  .form-input, .form-select {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s ease;
+    background: var(--card-bg);
+    color: var(--text);
+    font-family: inherit;
+  }
+  .form-input:focus, .form-select:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(79,109,245,0.1);
+  }
+  .form-input::placeholder { color: var(--text-tertiary); }
+  .form-textarea { resize: vertical; min-height: 70px; }
+
+  /* Detail view */
+  .detail-section { margin-bottom: 24px; }
+  .detail-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .detail-section-title::before {
+    content: '';
+    width: 3px;
+    height: 14px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; }
+  .detail-item { display: flex; flex-direction: column; gap: 2px; }
+  .detail-label { font-size: 12px; color: var(--text-secondary); }
+  .detail-value { font-size: 14px; color: var(--text); font-weight: 500; }
+
+  /* Feedback form */
+  .rating-group { display: flex; gap: 8px; }
+  .rating-btn {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: var(--card-bg);
+  }
+  .rating-btn:hover { border-color: var(--primary); }
+  .rating-btn.selected { border-color: var(--primary); background: var(--primary-light); }
+  .rating-btn .rating-icon { font-size: 24px; }
+  .rating-btn .rating-label { font-size: 13px; font-weight: 500; margin-top: 4px; }
+
+  /* Timeline */
+  .timeline { display: flex; flex-direction: column; gap: 0; }
+  .timeline-item {
+    display: flex;
+    gap: 12px;
+    padding-bottom: 20px;
+    position: relative;
+  }
+  .timeline-item:last-child { padding-bottom: 0; }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 20px;
+    bottom: 0;
+    width: 2px;
+    background: var(--border);
+  }
+  .timeline-item:last-child::before { display: none; }
+  .timeline-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 3px solid var(--border);
+    background: var(--card-bg);
+    flex-shrink: 0;
+    margin-top: 2px;
+    z-index: 1;
+  }
+  .timeline-dot.done { border-color: var(--green); background: var(--green); }
+  .timeline-dot.current { border-color: var(--primary); background: var(--primary); box-shadow: 0 0 0 4px var(--primary-light); }
+  .timeline-content { flex: 1; }
+  .timeline-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .timeline-desc { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    top: 80px;
+    right: 32px;
+    background: var(--text);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    box-shadow: var(--shadow-lg);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: slideInRight 0.2s ease;
+  }
+  @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .toast.success { background: #15803d; }
+  .toast.error { background: var(--red); }
+  .toast.hide { animation: slideOutRight 0.2s ease forwards; }
+  @keyframes slideOutRight { to { transform: translateX(120%); opacity: 0; } }
+
+  /* Responsive */
+  @media (max-width: 1100px) {
+    .stats-bar { grid-template-columns: repeat(3, 1fr); }
+    .form-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 768px) {
+    .header { padding: 12px 16px; }
+    .stats-bar { grid-template-columns: repeat(2, 1fr); padding: 16px; }
+    .main { padding: 16px; }
+    .search-box { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Login Overlay -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <div class="login-logo">实</div>
+    <div class="login-title">实操台账管理系统</div>
+    <div class="login-subtitle">请登录后进入系统</div>
+    <div class="login-form-group">
+      <label>企微账号 / 用户名</label>
+      <input type="text" id="loginUser" placeholder="请输入账号" autocomplete="username">
+    </div>
+    <div class="login-form-group">
+      <label>密码</label>
+      <input type="password" id="loginPwd" placeholder="请输入密码" autocomplete="current-password">
+    </div>
+    <div class="device-section">
+      <div class="device-section-title">📱 设备登记（登录审计）</div>
+      <div class="login-form-group" style="margin-bottom:12px;">
+        <label>设备型号</label>
+        <input type="text" id="loginDeviceModel" placeholder="如：iPhone 15 / ThinkPad X1">
+      </div>
+      <div class="login-form-group" style="margin-bottom:12px;">
+        <label>配件</label>
+        <input type="text" id="loginDeviceAcc" placeholder="如：电源适配器、扩展坞">
+      </div>
+      <div class="login-form-group" style="margin-bottom:0;">
+        <label>序列号</label>
+        <input type="text" id="loginDeviceSn" placeholder="设备序列号/SN">
+      </div>
+    </div>
+    <button class="login-btn" onclick="doLogin()">登 录</button>
+    <div class="login-error" id="loginError">账号或密码错误</div>
+    <div class="login-hint">默认账号：admin / admin123（行政）<br>hr / hr666（HR）</div>
+  </div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <div class="header-logo">实</div>
+    <div>
+      <div class="header-title">实操台账管理系统</div>
+      <div class="header-subtitle">实操人员登记 · 带教反馈 · 结算入职</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="user-badge" id="userBadge" style="display:none;">
+      <div class="avatar-sm" id="userAvatar">A</div>
+      <span id="userName">—</span>
+      <span class="role-badge" id="userRoleBadge"></span>
+    </div>
+    <button class="nav-link" id="navAccounts" style="display:none;" onclick="openAccountsModal()">👥 账号管理</button>
+    <button class="nav-link" id="navLogs" style="display:none;" onclick="openLogsModal()">📋 登录日志</button>
+    <button class="btn btn-default" onclick="exportCSV()">
+      <span>📄</span> 导出
+    </button>
+    <button class="btn btn-primary" onclick="openRegisterModal()">
+      <span>＋</span> 登记
+    </button>
+    <button class="nav-link" onclick="logout()">退出</button>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-bar" id="statsBar"></div>
+
+<!-- Main -->
+<div class="main">
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="搜索姓名、带教人..." oninput="renderTable()">
+      </div>
+    </div>
+    <div class="toolbar-right">
+      <div class="filter-tabs" id="filterTabs">
+        <button class="filter-tab active" data-filter="all" onclick="setFilter('all')">全部 <span class="count" id="count-all">0</span></button>
+        <button class="filter-tab" data-filter="practicing" onclick="setFilter('practicing')">实操中 <span class="count" id="count-practicing">0</span></button>
+        <button class="filter-tab" data-filter="feedback_pending" onclick="setFilter('feedback_pending')">待反馈 <span class="count" id="count-feedback_pending">0</span></button>
+        <button class="filter-tab" data-filter="feedback_done" onclick="setFilter('feedback_done')">已反馈 <span class="count" id="count-feedback_done">0</span></button>
+        <button class="filter-tab" data-filter="done" onclick="setFilter('done')">已完结 <span class="count" id="count-done">0</span></button>
+        <button class="filter-tab" data-filter="alert" onclick="setFilter('alert')">⚠️ 需关注 <span class="count" id="count-alert">0</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>实操人员</th>
+          <th>带教人</th>
+          <th>实操周期</th>
+          <th>剩余天数</th>
+          <th class="hr-only-col">实操薪资</th>
+          <th>当前状态</th>
+          <th style="text-align:right;">操作</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+    <div id="emptyState" class="empty-state" style="display:none;">
+      <div class="empty-state-icon">📋</div>
+      <div class="empty-state-text">暂无实操台账记录</div>
+      <button class="btn btn-primary" onclick="openRegisterModal()">＋ 登记第一位实操人员</button>
+    </div>
+  </div>
+</div>
+
+<!-- Register/Edit Modal -->
+<div class="modal-overlay" id="registerModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="registerModalTitle">登记实操人员</div>
+      <button class="modal-close" onclick="closeModal('registerModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">实操人员姓名 <span class="req">*</span></label>
+          <input type="text" class="form-input" id="f_name" placeholder="请输入姓名">
+        </div>
+        <div class="form-group">
+          <label class="form-label">带教人 <span class="req">*</span></label>
+          <input type="text" class="form-input" id="f_mentor" placeholder="请输入带教人姓名">
+        </div>
+        <div class="form-group">
+          <label class="form-label">实操天数 <span class="req">*</span></label>
+          <input type="number" class="form-input" id="f_days" placeholder="如：7" min="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">实操入职日期 <span class="req">*</span></label>
+          <input type="date" class="form-input" id="f_onboardDate">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">备注</label>
+          <input type="text" class="form-input" id="f_remark" placeholder="可选">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('registerModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveRecord()">保存登记</button>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal" style="width: 640px;">
+    <div class="modal-header">
+      <div class="modal-title">台账详情</div>
+      <button class="modal-close" onclick="closeModal('detailModal')">✕</button>
+    </div>
+    <div class="modal-body" id="detailModalBody"></div>
+    <div class="modal-footer" id="detailModalFooter"></div>
+  </div>
+</div>
+
+<!-- Feedback Modal -->
+<div class="modal-overlay" id="feedbackModal">
+  <div class="modal" style="width: 480px;">
+    <div class="modal-header">
+      <div class="modal-title">带教反馈登记</div>
+      <button class="modal-close" onclick="closeModal('feedbackModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="feedbackPersonInfo" style="background:var(--gray-bg); padding:12px 16px; border-radius:var(--radius-sm); margin-bottom:20px; font-size:13px; color:var(--text-secondary);"></div>
+      <div class="form-group" style="margin-bottom: 20px;">
+        <label class="form-label">综合评价 <span class="req">*</span></label>
+        <div class="rating-group">
+          <div class="rating-btn" data-rating="pass" onclick="selectRating('pass')">
+            <div class="rating-icon">👍</div>
+            <div class="rating-label">通过·建议入职</div>
+          </div>
+          <div class="rating-btn" data-rating="fail" onclick="selectRating('fail')">
+            <div class="rating-icon">👎</div>
+            <div class="rating-label">不通过·结算离场</div>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">带教反馈意见 <span class="req">*</span></label>
+        <textarea class="form-input form-textarea" id="f_feedbackNote" placeholder="请填写实操表现、技能掌握情况、建议等..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('feedbackModal')">取消</button>
+      <button class="btn btn-primary" onclick="submitFeedback()">提交反馈</button>
+    </div>
+  </div>
+</div>
+
+<!-- Salary Modal (HR二次登记) -->
+<div class="modal-overlay" id="salaryModal">
+  <div class="modal" style="width: 480px;">
+    <div class="modal-header">
+      <div class="modal-title">人事登记薪资</div>
+      <button class="modal-close" onclick="closeModal('salaryModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="salaryPersonInfo" style="background:var(--gray-bg); padding:12px 16px; border-radius:var(--radius-sm); margin-bottom:20px; font-size:13px; color:var(--text-secondary);"></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">薪资标准（元/天） <span class="req">*</span></label>
+          <input type="number" class="form-input" id="f_salaryInput" placeholder="请输入日薪标准" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">预计薪资合计</label>
+          <input type="text" class="form-input" id="f_salaryTotal" readonly style="background:var(--gray-bg);">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">备注</label>
+          <input type="text" class="form-input" id="f_salaryNote" placeholder="可选：薪资说明、发放方式等">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('salaryModal')">取消</button>
+      <button class="btn btn-primary" onclick="submitSalary()">保存薪资</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settlement Modal -->
+<div class="modal-overlay" id="settleModal">
+  <div class="modal" style="width: 480px;">
+    <div class="modal-header">
+      <div class="modal-title" id="settleModalTitle">办理结算</div>
+      <button class="modal-close" onclick="closeModal('settleModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="settlePersonInfo" style="background:var(--gray-bg); padding:12px 16px; border-radius:var(--radius-sm); margin-bottom:20px; font-size:13px; color:var(--text-secondary);"></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" id="settleDateLabel">结算日期 <span class="req">*</span></label>
+          <input type="date" class="form-input" id="f_settleDate">
+        </div>
+        <div class="form-group">
+          <label class="form-label">结算金额 <span class="hint">（元）</span></label>
+          <input type="number" class="form-input" id="f_settleAmount" placeholder="自动计算或手动填写" min="0">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">备注</label>
+          <input type="text" class="form-input" id="f_settleNote" placeholder="可选">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('settleModal')">取消</button>
+      <button class="btn btn-primary" onclick="submitSettlement()">确认办理</button>
+    </div>
+  </div>
+</div>
+
+<!-- Accounts Management Modal -->
+<div class="modal-overlay" id="accountsModal">
+  <div class="modal" style="width:680px;">
+    <div class="modal-header">
+      <div class="modal-title">👥 账号管理</div>
+      <button class="modal-close" onclick="closeModal('accountsModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <div style="font-size:13px; color:var(--text-secondary);">管理可登录系统的行政/HR账号</div>
+        <button class="btn btn-primary btn-sm" onclick="openAddAccountForm()">＋ 新增账号</button>
+      </div>
+      <div id="addAccountForm" style="display:none; background:var(--gray-bg); padding:16px; border-radius:10px; margin-bottom:16px;">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">用户名 <span class="req">*</span></label>
+            <input type="text" class="form-input" id="acc_username" placeholder="登录用用户名">
+          </div>
+          <div class="form-group">
+            <label class="form-label">密码 <span class="req">*</span></label>
+            <input type="text" class="form-input" id="acc_password" placeholder="登录密码">
+          </div>
+          <div class="form-group">
+            <label class="form-label">姓名 <span class="req">*</span></label>
+            <input type="text" class="form-input" id="acc_name" placeholder="真实姓名">
+          </div>
+          <div class="form-group">
+            <label class="form-label">企微账号</label>
+            <input type="text" class="form-input" id="acc_wecom" placeholder="企微账号/手机号">
+          </div>
+          <div class="form-group">
+            <label class="form-label">角色 <span class="req">*</span></label>
+            <select class="form-input" id="acc_role">
+              <option value="admin">行政</option>
+              <option value="hr">HR</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+          <button class="btn btn-default btn-sm" onclick="closeAddAccountForm()">取消</button>
+          <button class="btn btn-primary btn-sm" onclick="saveAccount()">保存账号</button>
+        </div>
+      </div>
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>用户名</th>
+            <th>姓名</th>
+            <th>企微账号</th>
+            <th>角色</th>
+            <th>状态</th>
+            <th style="text-align:right;">操作</th>
+          </tr>
+        </thead>
+        <tbody id="accountsBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('accountsModal')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- Login Logs Modal -->
+<div class="modal-overlay" id="logsModal">
+  <div class="modal" style="width:760px;">
+    <div class="modal-header">
+      <div class="modal-title">📋 登录日志（设备审计）</div>
+      <button class="modal-close" onclick="closeModal('logsModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;">记录每次登录的账号、企微号、设备型号、配件、序列号和时间</div>
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>账号</th>
+            <th>姓名</th>
+            <th>企微号</th>
+            <th>设备型号</th>
+            <th>配件</th>
+            <th>序列号</th>
+          </tr>
+        </thead>
+        <tbody id="logsBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('logsModal')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== Data Layer ====================
+const STORAGE_KEY = 'practice_ledger_data';
+const ROLE_KEY = 'practice_ledger_role';
+const ACCOUNTS_KEY = 'practice_accounts';
+const LOGIN_LOGS_KEY = 'practice_login_logs';
+const SESSION_KEY = 'practice_session';
+let records = [];
+let accounts = [];
+let loginLogs = [];
+let currentUser = null; // { username, name, wecom, role }
+let currentFilter = 'all';
+let currentRole = 'admin';
+let editingId = null;
+let feedbackRecordId = null;
+let settleRecordId = null;
+let settleType = 'settle';
+let salaryRecordId = null;
+let selectedRating = null;
+
+const STATUS_CONFIG = {
+  practicing:       { label: '实操中',   badge: 'badge-green',  color: '#22c55e' },
+  feedback_pending: { label: '待反馈',   badge: 'badge-orange', color: '#f59e0b' },
+  feedback_done:    { label: '已反馈',   badge: 'badge-blue',   color: '#3b82f6' },
+  settled:          { label: '已结算',   badge: 'badge-gray',   color: '#6b7280' },
+  onboarded:        { label: '已入职',   badge: 'badge-purple', color: '#8b5cf6' },
+};
+
+// Avatar colors
+const AVATAR_COLORS = ['#4f6df5','#22c55e','#f59e0b','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f43f5e'];
+
+function loadData() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) {
+    try { records = JSON.parse(raw); } catch(e) { records = []; }
+  }
+  // Auto-update statuses based on dates
+  autoUpdateStatuses();
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+
+// ==================== Accounts & Auth ====================
+function loadAccounts() {
+  const raw = localStorage.getItem(ACCOUNTS_KEY);
+  if (raw) {
+    try { accounts = JSON.parse(raw); } catch(e) { accounts = []; }
+  }
+  if (accounts.length === 0) {
+    accounts = [
+      { id: 'A1', username: 'admin', password: 'admin123', name: '系统管理员', wecom: '', role: 'admin', active: true },
+      { id: 'A2', username: 'hr', password: 'hr666', name: '人事专员', wecom: '', role: 'hr', active: true },
+    ];
+    saveAccounts();
+  }
+}
+function saveAccounts() {
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+}
+function loadLoginLogs() {
+  const raw = localStorage.getItem(LOGIN_LOGS_KEY);
+  if (raw) {
+    try { loginLogs = JSON.parse(raw); } catch(e) { loginLogs = []; }
+  }
+}
+function saveLoginLogs() {
+  // Keep last 200 entries
+  if (loginLogs.length > 200) loginLogs = loginLogs.slice(-200);
+  localStorage.setItem(LOGIN_LOGS_KEY, JSON.stringify(loginLogs));
+}
+
+function loadSession() {
+  const raw = sessionStorage.getItem(SESSION_KEY);
+  if (raw) {
+    try { currentUser = JSON.parse(raw); return true; } catch(e) { return false; }
+  }
+  return false;
+}
+
+function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPwd').value;
+  const deviceModel = document.getElementById('loginDeviceModel').value.trim();
+  const deviceAcc = document.getElementById('loginDeviceAcc').value.trim();
+  const deviceSn = document.getElementById('loginDeviceSn').value.trim();
+
+  if (!username || !password) {
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('loginError').textContent = '请输入账号和密码';
+    return;
+  }
+
+  const acc = accounts.find(a => a.username === username && a.password === password && a.active);
+  if (!acc) {
+    document.getElementById('loginError').style.display = 'block';
+    document.getElementById('loginError').textContent = '账号或密码错误，或账号已停用';
+    return;
+  }
+
+  // Record login log
+  const log = {
+    time: new Date().toLocaleString('zh-CN', { hour12: false }),
+    username: acc.username,
+    name: acc.name,
+    wecom: acc.wecom || '',
+    deviceModel: deviceModel || '—',
+    deviceAcc: deviceAcc || '—',
+    deviceSn: deviceSn || '—',
+  };
+  loginLogs.push(log);
+  saveLoginLogs();
+
+  // Set session
+  currentUser = { username: acc.username, name: acc.name, wecom: acc.wecom, role: acc.role };
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
+
+  enterApp();
+}
+
+function logout() {
+  if (!confirm('确认退出登录？')) return;
+  currentUser = null;
+  sessionStorage.removeItem(SESSION_KEY);
+  document.getElementById('loginOverlay').classList.remove('hidden');
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPwd').value = '';
+  document.getElementById('loginError').style.display = 'none';
+}
+
+function enterApp() {
+  document.getElementById('loginOverlay').classList.add('hidden');
+  // Role from login
+  currentRole = currentUser.role;
+  document.body.classList.toggle('hr-mode', currentRole === 'hr');
+
+  // User badge
+  const badge = document.getElementById('userBadge');
+  badge.style.display = 'flex';
+  document.getElementById('userAvatar').textContent = currentUser.name.charAt(0);
+  document.getElementById('userName').textContent = currentUser.name;
+  const roleBadge = document.getElementById('userRoleBadge');
+  roleBadge.textContent = currentRole === 'hr' ? 'HR' : '行政';
+  roleBadge.className = 'role-badge ' + (currentRole === 'hr' ? 'role-badge-hr' : 'role-badge-admin');
+
+  // HR-only nav
+  document.getElementById('navAccounts').style.display = isHR() ? 'inline-block' : 'none';
+  document.getElementById('navLogs').style.display = isHR() ? 'inline-block' : 'none';
+
+  // Subtitle
+  const subtitle = document.querySelector('.header-subtitle');
+  if (subtitle) {
+    subtitle.textContent = currentRole === 'hr'
+      ? 'HR后台 · 完整数据 · 薪资/反馈/结算'
+      : '行政视图 · 仅登记基础信息';
+  }
+  render();
+  showToast('欢迎，' + currentUser.name, 'success');
+}
+
+// ==================== Accounts Management ====================
+function openAccountsModal() {
+  if (!isHR()) return showToast('仅HR可管理账号', 'error');
+  renderAccounts();
+  showModal('accountsModal');
+}
+function openAddAccountForm() {
+  document.getElementById('addAccountForm').style.display = 'block';
+  ['acc_username','acc_password','acc_name','acc_wecom'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('acc_role').value = 'admin';
+  document.getElementById('acc_username').focus();
+}
+function closeAddAccountForm() {
+  document.getElementById('addAccountForm').style.display = 'none';
+}
+function saveAccount() {
+  const username = document.getElementById('acc_username').value.trim();
+  const password = document.getElementById('acc_password').value.trim();
+  const name = document.getElementById('acc_name').value.trim();
+  const wecom = document.getElementById('acc_wecom').value.trim();
+  const role = document.getElementById('acc_role').value;
+  if (!username || !password || !name) return showToast('用户名、密码、姓名必填', 'error');
+  if (accounts.find(a => a.username === username)) return showToast('用户名已存在', 'error');
+  accounts.push({ id: 'A' + Date.now().toString(36), username, password, name, wecom, role, active: true });
+  saveAccounts();
+  renderAccounts();
+  closeAddAccountForm();
+  showToast('账号已创建', 'success');
+}
+function deleteAccount(id) {
+  const acc = accounts.find(a => a.id === id);
+  if (!acc) return;
+  if (acc.username === currentUser.username) return showToast('不能删除当前登录账号', 'error');
+  if (!confirm(`确认删除账号「${acc.name}」？`)) return;
+  accounts = accounts.filter(a => a.id !== id);
+  saveAccounts();
+  renderAccounts();
+  showToast('账号已删除', 'success');
+}
+function toggleAccount(id) {
+  const acc = accounts.find(a => a.id === id);
+  if (!acc) return;
+  acc.active = !acc.active;
+  saveAccounts();
+  renderAccounts();
+  showToast(acc.active ? '账号已启用' : '账号已停用', 'success');
+}
+function renderAccounts() {
+  const body = document.getElementById('accountsBody');
+  body.innerHTML = accounts.map(a => `
+    <tr>
+      <td><strong>${a.username}</strong></td>
+      <td>${a.name}</td>
+      <td>${a.wecom || '—'}</td>
+      <td><span class="role-badge ${a.role === 'hr' ? 'role-badge-hr' : 'role-badge-admin'}">${a.role === 'hr' ? 'HR' : '行政'}</span></td>
+      <td>${a.active ? '<span style="color:#22c55e;">启用</span>' : '<span style="color:#ef4444;">停用</span>'}</td>
+      <td style="text-align:right;">
+        <button class="btn btn-text btn-sm" onclick="toggleAccount('${a.id}')">${a.active ? '停用' : '启用'}</button>
+        <button class="btn btn-text btn-sm btn-danger-text" onclick="deleteAccount('${a.id}')">删除</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ==================== Login Logs ====================
+function openLogsModal() {
+  if (!isHR()) return showToast('仅HR可查看日志', 'error');
+  renderLogs();
+  showModal('logsModal');
+}
+function renderLogs() {
+  const body = document.getElementById('logsBody');
+  if (loginLogs.length === 0) {
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">暂无登录记录</td></tr>';
+    return;
+  }
+  body.innerHTML = loginLogs.slice().reverse().map(l => `
+    <tr>
+      <td style="white-space:nowrap;">${l.time}</td>
+      <td>${l.username}</td>
+      <td>${l.name}</td>
+      <td>${l.wecom || '—'}</td>
+      <td>${l.deviceModel}</td>
+      <td>${l.deviceAcc}</td>
+      <td style="font-family:monospace; font-size:12px;">${l.deviceSn}</td>
+    </tr>
+  `).join('');
+}
+
+function isHR() { return currentUser && currentUser.role === 'hr'; }
+function isAdmin() { return currentUser && currentUser.role === 'admin'; }
+
+function genId() {
+  return 'P' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+}
+
+function addDays(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0,10);
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0,10);
+}
+
+function daysBetween(d1, d2) {
+  const diff = Math.ceil((new Date(d2) - new Date(d1)) / 86400000);
+  return diff;
+}
+
+function autoUpdateStatuses() {
+  const today = todayStr();
+  let changed = false;
+  records.forEach(r => {
+    if (r.status === 'practicing' && r.endDate && r.endDate <= today) {
+      r.status = 'feedback_pending';
+      changed = true;
+    }
+  });
+  if (changed) saveData();
+}
+
+// ==================== Render ====================
+function render() {
+  renderStats();
+  renderTable();
+}
+
+function renderStats() {
+  const today = todayStr();
+  let practicing = 0, feedbackPending = 0, feedbackDone = 0, done = 0, alert = 0;
+
+  records.forEach(r => {
+    if (r.status === 'practicing') {
+      practicing++;
+      const left = daysBetween(today, r.endDate);
+      if (left <= 1) alert++;
+    } else if (r.status === 'feedback_pending') {
+      feedbackPending++;
+      alert++;
+    } else if (r.status === 'feedback_done') {
+      feedbackDone++;
+    } else {
+      done++;
+    }
+  });
+
+  const stats = [
+    { label: '实操总人数', value: records.length, dot: '#4f6df5' },
+    { label: '实操中', value: practicing, dot: '#22c55e' },
+    { label: '待反馈', value: feedbackPending, dot: '#f59e0b' },
+    { label: '已反馈', value: feedbackDone, dot: '#3b82f6' },
+    { label: '需关注', value: alert, dot: '#ef4444', isAlert: true },
+  ];
+
+  document.getElementById('statsBar').innerHTML = stats.map(s => `
+    <div class="stat-card ${s.isAlert && s.value > 0 ? 'alert' : ''}">
+      <div class="stat-label"><span class="stat-dot" style="background:${s.dot}"></span> ${s.label}</div>
+      <div class="stat-value">${s.value}</div>
+    </div>
+  `).join('');
+
+  // Update filter counts
+  document.getElementById('count-all').textContent = records.length;
+  document.getElementById('count-practicing').textContent = practicing;
+  document.getElementById('count-feedback_pending').textContent = feedbackPending;
+  document.getElementById('count-feedback_done').textContent = feedbackDone;
+  document.getElementById('count-done').textContent = done;
+  document.getElementById('count-alert').textContent = alert;
+}
+
+function getFilteredRecords() {
+  const search = document.getElementById('searchInput').value.toLowerCase().trim();
+  let filtered = records;
+
+  if (currentFilter === 'alert') {
+    const today = todayStr();
+    filtered = records.filter(r => {
+      if (r.status === 'feedback_pending') return true;
+      if (r.status === 'practicing') return daysBetween(today, r.endDate) <= 1;
+      return false;
+    });
+  } else if (currentFilter === 'done') {
+    filtered = records.filter(r => r.status === 'settled' || r.status === 'onboarded');
+  } else if (currentFilter !== 'all') {
+    filtered = records.filter(r => r.status === currentFilter);
+  }
+
+  if (search) {
+    filtered = filtered.filter(r =>
+      r.name.toLowerCase().includes(search) || (r.mentor || '').toLowerCase().includes(search)
+    );
+  }
+
+  // Sort: alert first, then by onboard date desc
+  filtered.sort((a, b) => {
+    const aAlert = isAlertRecord(a) ? 0 : 1;
+    const bAlert = isAlertRecord(b) ? 0 : 1;
+    if (aAlert !== bAlert) return aAlert - bAlert;
+    return (b.onboardDate || '').localeCompare(a.onboardDate || '');
+  });
+
+  return filtered;
+}
+
+function isAlertRecord(r) {
+  if (r.status === 'feedback_pending') return true;
+  if (r.status === 'practicing') {
+    const left = daysBetween(todayStr(), r.endDate);
+    return left <= 1;
+  }
+  return false;
+}
+
+function getAvatarColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function formatMoney(val) {
+  if (val === null || val === undefined || val === '') return '—';
+  return '¥' + Number(val).toLocaleString('zh-CN');
+}
+
+function renderTable() {
+  autoUpdateStatuses();
+  const filtered = getFilteredRecords();
+  const tbody = document.getElementById('tableBody');
+  const empty = document.getElementById('emptyState');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = records.length === 0 ? 'block' : 'none';
+    if (records.length > 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--text-tertiary);">当前筛选条件下无记录</td></tr>`;
+    }
+    return;
+  }
+  empty.style.display = 'none';
+
+  const today = todayStr();
+  tbody.innerHTML = filtered.map(r => {
+    const config = STATUS_CONFIG[r.status] || STATUS_CONFIG.practicing;
+    const left = r.status === 'practicing' ? daysBetween(today, r.endDate) : null;
+    const alert = isAlertRecord(r);
+    const rowClass = r.status === 'feedback_pending' ? 'row-warning' : (alert ? 'row-alert' : '');
+
+    // Progress
+    let progressHtml = '';
+    if (r.status === 'practicing' && left !== null) {
+      const total = r.practiceDays;
+      const elapsed = total - left;
+      const pct = Math.max(0, Math.min(100, (elapsed / total) * 100));
+      const pColor = left <= 1 ? 'var(--red)' : left <= 3 ? 'var(--orange)' : 'var(--green)';
+      progressHtml = `
+        <span class="progress-bar"><span class="progress-fill" style="width:${pct}%; background:${pColor};"></span></span>
+      `;
+    }
+
+    // Remaining days
+    let daysHtml = '—';
+    if (r.status === 'practicing' && left !== null) {
+      if (left < 0) daysHtml = `<span class="date-overdue">已超期 ${Math.abs(left)} 天</span>`;
+      else if (left === 0) daysHtml = `<span class="date-overdue">今日到期</span>`;
+      else if (left <= 1) daysHtml = `<span class="date-overdue">剩 ${left} 天</span>`;
+      else if (left <= 3) daysHtml = `<span class="date-soon">剩 ${left} 天</span>`;
+      else daysHtml = `剩 ${left} 天`;
+    }
+
+    // Cycle
+    const cycleHtml = `${r.onboardDate} ~ ${r.endDate}`;
+
+    // Salary cell (HR only)
+    let salaryCell = '';
+    if (isHR()) {
+      if (r.salary) {
+        salaryCell = `${formatMoney(r.salary * r.practiceDays)}<br><span style="font-size:11px;color:var(--text-tertiary);">${r.salary}元/天 × ${r.practiceDays}天</span>`;
+      } else {
+        salaryCell = `<span class="badge badge-red" style="cursor:pointer;" onclick="openSalaryModal('${r.id}')">待登记</span>`;
+      }
+    }
+
+    // Actions
+    let actions = `<button class="btn btn-text btn-sm" onclick="openDetail('${r.id}')">详情</button>`;
+    if (isHR()) {
+      if (!r.salary) {
+        actions += `<button class="btn btn-text btn-sm" onclick="openSalaryModal('${r.id}')">登记薪资</button>`;
+      }
+      if (r.status === 'practicing' || r.status === 'feedback_pending') {
+        actions += `<button class="btn btn-text btn-sm" onclick="openFeedback('${r.id}')">填写反馈</button>`;
+      }
+      actions += `<button class="btn btn-text btn-sm btn-danger-text" onclick="deleteRecord('${r.id}')">删除</button>`;
+    } else {
+      // Admin can only edit basic info
+      actions += `<button class="btn btn-text btn-sm" onclick="openRegisterModal('${r.id}')">编辑</button>`;
+    }
+
+    return `
+      <tr class="${rowClass}">
+        <td>
+          <div class="person-cell">
+            <div class="avatar" style="background:${getAvatarColor(r.name)};">${r.name.charAt(0)}</div>
+            <span class="person-name">${r.name}</span>
+          </div>
+        </td>
+        <td>${r.mentor || '—'}</td>
+        <td class="date-cell">${cycleHtml}</td>
+        <td>${progressHtml}${daysHtml}</td>
+        <td class="hr-only-col">${isHR() ? salaryCell : ''}</td>
+        <td><span class="badge ${config.badge}">${config.label}</span></td>
+        <td style="text-align:right;"><div class="action-group" style="justify-content:flex-end;">${actions}</div></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ==================== Filter ====================
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.filter === f);
+  });
+  renderTable();
+}
+
+// ==================== Register/Edit ====================
+function openRegisterModal(id) {
+  editingId = id || null;
+  const title = document.getElementById('registerModalTitle');
+  const saveBtn = document.querySelector('#registerModal .btn-primary');
+
+  if (id) {
+    const r = records.find(x => x.id === id);
+    if (!r) return;
+    title.textContent = '编辑实操人员';
+    saveBtn.textContent = '保存修改';
+    document.getElementById('f_name').value = r.name || '';
+    document.getElementById('f_mentor').value = r.mentor || '';
+    document.getElementById('f_days').value = r.practiceDays || '';
+    document.getElementById('f_onboardDate').value = r.onboardDate || '';
+    document.getElementById('f_remark').value = r.remark || '';
+  } else {
+    title.textContent = '登记实操人员';
+    saveBtn.textContent = '保存登记';
+    document.getElementById('f_name').value = '';
+    document.getElementById('f_mentor').value = '';
+    document.getElementById('f_days').value = '';
+    document.getElementById('f_onboardDate').value = todayStr();
+    document.getElementById('f_remark').value = '';
+  }
+  showModal('registerModal');
+}
+
+function saveRecord() {
+  const name = document.getElementById('f_name').value.trim();
+  const mentor = document.getElementById('f_mentor').value.trim();
+  const days = parseInt(document.getElementById('f_days').value);
+  const onboardDate = document.getElementById('f_onboardDate').value;
+  const remark = document.getElementById('f_remark').value.trim();
+
+  if (!name) return showToast('请填写实操人员姓名', 'error');
+  if (!mentor) return showToast('请填写带教人', 'error');
+  if (!days || days < 1) return showToast('请填写有效的实操天数', 'error');
+  if (!onboardDate) return showToast('请选择实操入职日期', 'error');
+
+  const endDate = addDays(onboardDate, days);
+  const today = todayStr();
+  let status = 'practicing';
+  if (endDate <= today) status = 'feedback_pending';
+
+  if (editingId) {
+    const r = records.find(x => x.id === editingId);
+    if (!r) return;
+    r.name = name;
+    r.mentor = mentor;
+    r.practiceDays = days;
+    r.onboardDate = onboardDate;
+    r.endDate = endDate;
+    r.remark = remark;
+    // Don't override status if already past practicing
+    if (r.status === 'practicing' && endDate <= today) r.status = 'feedback_pending';
+    showToast('已更新实操人员信息', 'success');
+  } else {
+    records.push({
+      id: genId(),
+      name, mentor, practiceDays: days,
+      onboardDate, endDate, salary: 0, remark,
+      status,
+      feedback: null,
+      settlement: null,
+      onboarding: null,
+      createdAt: new Date().toISOString(),
+    });
+    showToast('实操人员登记成功', 'success');
+  }
+
+  saveData();
+  closeModal('registerModal');
+  render();
+}
+
+// ==================== Detail ====================
+function openDetail(id) {
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+
+  const config = STATUS_CONFIG[r.status];
+  const today = todayStr();
+
+  // Timeline
+  const hr = isHR();
+  const steps = hr ? [
+    { title: '行政登记', desc: `${r.onboardDate} 登记，实操 ${r.practiceDays} 天`, done: true },
+    { title: '实操进行中', desc: r.status === 'practicing' ? `预计 ${r.endDate} 结束，剩余 ${daysBetween(today, r.endDate)} 天` : `已于 ${r.endDate} 结束`, done: r.status !== 'practicing', current: r.status === 'practicing' },
+    { title: '带教反馈', desc: r.feedback ? `${r.feedback.result === 'pass' ? '通过·建议入职' : '不通过·结算离场'}（${r.feedback.date}）` : '待带教人填写反馈问卷', done: !!r.feedback, current: r.status === 'feedback_pending' },
+    { title: r.feedback && r.feedback.result === 'pass' ? '办理入职' : '办理结算', desc: r.settlement ? `已于 ${r.settlement.date} 办理` : '人事待处理', done: r.status === 'settled' || r.status === 'onboarded', current: r.status === 'feedback_done' },
+  ] : [
+    { title: '行政登记', desc: `${r.onboardDate} 登记，实操 ${r.practiceDays} 天`, done: true },
+    { title: '实操进行中', desc: r.status === 'practicing' ? `预计 ${r.endDate} 结束` : `已于 ${r.endDate} 结束`, done: r.status !== 'practicing', current: r.status === 'practicing' },
+    { title: '带教反馈', desc: r.status === 'feedback_pending' ? '待带教人填写反馈' : (r.status === 'practicing' ? '未开始' : '已完成'), done: r.status !== 'practicing' && r.status !== 'feedback_pending', current: r.status === 'feedback_pending' },
+    { title: '人事办理', desc: r.status === 'settled' || r.status === 'onboarded' ? '已办理' : '人事待处理', done: r.status === 'settled' || r.status === 'onboarded', current: r.status === 'feedback_done' },
+  ];
+
+  let timelineHtml = steps.map(s => `
+    <div class="timeline-item">
+      <div class="timeline-dot ${s.done ? 'done' : ''} ${s.current ? 'current' : ''}"></div>
+      <div class="timeline-content">
+        <div class="timeline-title">${s.title}</div>
+        <div class="timeline-desc">${s.desc}</div>
+      </div>
+    </div>
+  `).join('');
+
+  let feedbackHtml = '';
+  if (r.feedback) {
+    feedbackHtml = `
+      <div class="detail-section">
+        <div class="detail-section-title">带教反馈</div>
+        <div class="detail-grid">
+          <div class="detail-item"><span class="detail-label">反馈结果</span><span class="detail-value">${r.feedback.result === 'pass' ? '👍 通过·建议入职' : '👎 不通过·结算离场'}</span></div>
+          <div class="detail-item"><span class="detail-label">反馈日期</span><span class="detail-value">${r.feedback.date}</span></div>
+          <div class="detail-item full"><span class="detail-label">反馈意见</span><span class="detail-value" style="font-weight:400;line-height:1.6;">${r.feedback.note}</span></div>
+        </div>
+      </div>
+    `;
+  }
+
+  let settleHtml = '';
+  if (r.settlement) {
+    settleHtml = `
+      <div class="detail-section">
+        <div class="detail-section-title">${r.status === 'onboarded' ? '入职信息' : '结算信息'}</div>
+        <div class="detail-grid">
+          <div class="detail-item"><span class="detail-label">${r.status === 'onboarded' ? '入职日期' : '结算日期'}</span><span class="detail-value">${r.settlement.date}</span></div>
+          ${r.settlement.amount ? `<div class="detail-item"><span class="detail-label">结算金额</span><span class="detail-value">${formatMoney(r.settlement.amount)}</span></div>` : ''}
+          ${r.settlement.note ? `<div class="detail-item full"><span class="detail-label">备注</span><span class="detail-value" style="font-weight:400;">${r.settlement.note}</span></div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  document.getElementById('detailModalBody').innerHTML = `
+    <div class="detail-section">
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
+        <div class="avatar" style="width:48px;height:48px;font-size:20px;background:${getAvatarColor(r.name)};">${r.name.charAt(0)}</div>
+        <div>
+          <div style="font-size:20px;font-weight:600;">${r.name}</div>
+          <div style="font-size:13px;color:var(--text-secondary);">带教人：${r.mentor || '—'}</div>
+        </div>
+        <span class="badge ${config.badge}" style="margin-left:auto;">${config.label}</span>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <div class="detail-section-title">基本信息</div>
+      <div class="detail-grid">
+        <div class="detail-item"><span class="detail-label">实操入职日期</span><span class="detail-value">${r.onboardDate}</span></div>
+        <div class="detail-item"><span class="detail-label">实操结束日期</span><span class="detail-value">${r.endDate}</span></div>
+        <div class="detail-item"><span class="detail-label">实操天数</span><span class="detail-value">${r.practiceDays} 天</span></div>
+        ${isHR() ? `<div class="detail-item"><span class="detail-label">实操薪资</span><span class="detail-value">${r.salary ? r.salary + ' 元/天（合计 ' + formatMoney(r.salary * r.practiceDays) + '）' : '<span class="badge badge-red">待人事登记</span>'}</span></div>` : ''}
+        ${r.remark ? `<div class="detail-item full"><span class="detail-label">备注</span><span class="detail-value" style="font-weight:400;">${r.remark}</span></div>` : ''}
+      </div>
+    </div>
+
+    ${isHR() ? feedbackHtml : ''}
+    ${isHR() ? settleHtml : ''}
+
+    <div class="detail-section">
+      <div class="detail-section-title">流程进度</div>
+      <div class="timeline">${timelineHtml}</div>
+    </div>
+  `;
+
+  // Footer buttons
+  let footerHtml = `<button class="btn btn-default" onclick="closeModal('detailModal')">关闭</button>`;
+
+  if (isHR()) {
+    // HR salary button
+    const salaryBtnText = r.salary ? '修改薪资' : '登记薪资';
+    footerHtml += `<button class="btn btn-default" onclick="closeModal('detailModal');openSalaryModal('${r.id}')">${salaryBtnText}</button>`;
+
+    if (r.status === 'practicing' || r.status === 'feedback_pending') {
+      footerHtml += `<button class="btn btn-primary" onclick="closeModal('detailModal');openFeedback('${r.id}')">填写带教反馈</button>`;
+    } else if (r.status === 'feedback_done') {
+      if (r.feedback && r.feedback.result === 'pass') {
+        footerHtml += `<button class="btn btn-primary" onclick="closeModal('detailModal');openSettlement('${r.id}','onboard')">办理正式入职</button>`;
+      } else {
+        footerHtml += `<button class="btn btn-primary" onclick="closeModal('detailModal');openSettlement('${r.id}','settle')">办理结算离场</button>`;
+      }
+    }
+    footerHtml += `<button class="btn btn-default" onclick="closeModal('detailModal');openRegisterModal('${r.id}')">编辑</button>`;
+  } else {
+    // Admin can only edit basic info
+    footerHtml += `<button class="btn btn-default" onclick="closeModal('detailModal');openRegisterModal('${r.id}')">编辑基础信息</button>`;
+  }
+  document.getElementById('detailModalFooter').innerHTML = footerHtml;
+
+  showModal('detailModal');
+}
+
+// ==================== Feedback ====================
+function openFeedback(id) {
+  feedbackRecordId = id;
+  selectedRating = null;
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+
+  document.getElementById('feedbackPersonInfo').innerHTML = `
+    <strong>${r.name}</strong> · 带教人：${r.mentor} · 实操周期：${r.onboardDate} ~ ${r.endDate}
+  `;
+  document.getElementById('f_feedbackNote').value = '';
+  document.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('selected'));
+
+  showModal('feedbackModal');
+}
+
+function selectRating(rating) {
+  selectedRating = rating;
+  document.querySelectorAll('.rating-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.rating === rating);
+  });
+}
+
+function submitFeedback() {
+  if (!selectedRating) return showToast('请选择综合评价', 'error');
+  const note = document.getElementById('f_feedbackNote').value.trim();
+  if (!note) return showToast('请填写带教反馈意见', 'error');
+
+  const r = records.find(x => x.id === feedbackRecordId);
+  if (!r) return;
+
+  r.feedback = {
+    result: selectedRating,
+    note: note,
+    date: todayStr(),
+  };
+  r.status = 'feedback_done';
+
+  saveData();
+  closeModal('feedbackModal');
+  render();
+  showToast('反馈已登记，请通知人事处理', 'success');
+}
+
+// ==================== Salary (HR二次登记) ====================
+function openSalaryModal(id) {
+  salaryRecordId = id;
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+
+  document.getElementById('salaryPersonInfo').innerHTML = `
+    <strong>${r.name}</strong> · 带教人：${r.mentor} · 实操周期：${r.onboardDate} ~ ${r.endDate}（${r.practiceDays}天）
+  `;
+  document.getElementById('f_salaryInput').value = r.salary || '';
+  document.getElementById('f_salaryNote').value = r.salaryNote || '';
+  updateSalaryTotal();
+
+  // Auto-calculate total when input changes
+  document.getElementById('f_salaryInput').oninput = updateSalaryTotal;
+
+  showModal('salaryModal');
+}
+
+function updateSalaryTotal() {
+  const r = records.find(x => x.id === salaryRecordId);
+  const daily = parseFloat(document.getElementById('f_salaryInput').value) || 0;
+  const total = r && daily ? daily * r.practiceDays : 0;
+  document.getElementById('f_salaryTotal').value = total ? formatMoney(total) : '—';
+}
+
+function submitSalary() {
+  const daily = parseFloat(document.getElementById('f_salaryInput').value);
+  if (!daily || daily <= 0) return showToast('请输入有效的薪资标准', 'error');
+  const note = document.getElementById('f_salaryNote').value.trim();
+
+  const r = records.find(x => x.id === salaryRecordId);
+  if (!r) return;
+
+  r.salary = daily;
+  r.salaryNote = note;
+
+  saveData();
+  closeModal('salaryModal');
+  render();
+  showToast('人事薪资已登记', 'success');
+}
+
+// ==================== Settlement / Onboarding ====================
+function openSettlement(id, type) {
+  settleRecordId = id;
+  settleType = type;
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+
+  // HR must set salary before settlement/onboarding
+  if (!r.salary) {
+    if (confirm('该人员尚未登记薪资，是否先进行人事薪资登记？')) {
+      openSalaryModal(id);
+    }
+    return;
+  }
+
+  const title = document.getElementById('settleModalTitle');
+  const dateLabel = document.getElementById('settleDateLabel');
+
+  if (type === 'onboard') {
+    title.textContent = '办理正式入职';
+    dateLabel.innerHTML = '入职日期 <span class="req">*</span>';
+  } else {
+    title.textContent = '办理结算离场';
+    dateLabel.innerHTML = '结算日期 <span class="req">*</span>';
+  }
+
+  document.getElementById('settlePersonInfo').innerHTML = `
+    <strong>${r.name}</strong> · 带教人：${r.mentor} · 实操周期：${r.onboardDate} ~ ${r.endDate}（${r.practiceDays}天）
+    ${r.salary ? '<br>薪资标准：' + r.salary + ' 元/天，合计 ' + formatMoney(r.salary * r.practiceDays) : ''}
+  `;
+
+  document.getElementById('f_settleDate').value = todayStr();
+  document.getElementById('f_settleAmount').value = r.salary ? (r.salary * r.practiceDays) : '';
+  document.getElementById('f_settleNote').value = '';
+
+  showModal('settleModal');
+}
+
+function submitSettlement() {
+  const date = document.getElementById('f_settleDate').value;
+  if (!date) return showToast('请选择日期', 'error');
+  const amount = parseFloat(document.getElementById('f_settleAmount').value) || 0;
+  const note = document.getElementById('f_settleNote').value.trim();
+
+  const r = records.find(x => x.id === settleRecordId);
+  if (!r) return;
+
+  r.settlement = { date, amount, note };
+  r.status = settleType === 'onboard' ? 'onboarded' : 'settled';
+
+  saveData();
+  closeModal('settleModal');
+  render();
+  showToast(settleType === 'onboard' ? '入职手续已办理完成' : '结算已办理完成', 'success');
+}
+
+// ==================== Delete ====================
+function deleteRecord(id) {
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  if (!confirm(`确认删除「${r.name}」的台账记录？此操作不可撤销。`)) return;
+  records = records.filter(x => x.id !== id);
+  saveData();
+  render();
+  showToast('记录已删除', 'success');
+}
+
+// ==================== Export CSV ====================
+function exportCSV() {
+  if (records.length === 0) return showToast('暂无数据可导出', 'error');
+
+  const hr = isHR();
+  const headers = hr
+    ? ['实操人员', '带教人', '实操入职日期', '实操结束日期', '实操天数', '实操薪资(元/天)', '薪资合计', '状态', '反馈结果', '反馈日期', '反馈意见', '结算/入职日期', '结算金额', '备注']
+    : ['实操人员', '带教人', '实操入职日期', '实操结束日期', '实操天数', '状态', '备注'];
+
+  const rows = records.map(r => {
+    const config = STATUS_CONFIG[r.status];
+    if (hr) {
+      return [
+        r.name, r.mentor, r.onboardDate, r.endDate, r.practiceDays,
+        r.salary || '', r.salary ? r.salary * r.practiceDays : '',
+        config.label,
+        r.feedback ? (r.feedback.result === 'pass' ? '通过·建议入职' : '不通过·结算离场') : '',
+        r.feedback ? r.feedback.date : '',
+        r.feedback ? r.feedback.note : '',
+        r.settlement ? r.settlement.date : '',
+        r.settlement ? r.settlement.amount : '',
+        r.remark || '',
+      ];
+    }
+    return [
+      r.name, r.mentor, r.onboardDate, r.endDate, r.practiceDays,
+      config.label, r.remark || '',
+    ];
+  });
+
+  // BOM for Excel Chinese
+  let csv = '\uFEFF' + headers.join(',') + '\n';
+  rows.forEach(row => {
+    csv += row.map(cell => {
+      const s = String(cell);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }).join(',') + '\n';
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `实操台账_${hr ? 'HR' : '行政'}_${todayStr()}.csv`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+  showToast(hr ? 'HR 完整台账已导出' : '行政台账已导出（不含薪资）', 'success');
+}
+
+// ==================== Modal Utils ====================
+function showModal(id) {
+  document.getElementById(id).classList.add('show');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+// Close on overlay click
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => {
+    if (e.target === o) o.classList.remove('show');
+  });
+});
+
+// ==================== Toast ====================
+let toastTimer = null;
+function showToast(msg, type) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  if (toastTimer) clearTimeout(toastTimer);
+
+  const toast = document.createElement('div');
+  toast.className = 'toast ' + (type || '');
+  toast.innerHTML = (type === 'success' ? '✓ ' : type === 'error' ? '✕ ' : '') + msg;
+  document.body.appendChild(toast);
+
+  toastTimer = setTimeout(() => {
+    toast.classList.add('hide');
+    setTimeout(() => toast.remove(), 200);
+  }, 2500);
+}
+
+// ==================== Demo Data ====================
+function loadDemoData() {
+  const today = new Date();
+  const demoRecords = [
+    {
+      id: genId(),
+      name: '张小明', mentor: '李主管',
+      practiceDays: 7,
+      onboardDate: addDays(todayStr(), -8),
+      endDate: addDays(todayStr(), -1),
+      salary: 200, remark: '前端开发岗',
+      status: 'feedback_pending',
+      feedback: null, settlement: null, onboarding: null,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: genId(),
+      name: '王芳', mentor: '赵经理',
+      practiceDays: 5,
+      onboardDate: addDays(todayStr(), -2),
+      endDate: addDays(todayStr(), 3),
+      salary: 180, remark: '产品运营岗',
+      status: 'practicing',
+      feedback: null, settlement: null, onboarding: null,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: genId(),
+      name: '刘强', mentor: '陈总监',
+      practiceDays: 3,
+      onboardDate: addDays(todayStr(), -5),
+      endDate: addDays(todayStr(), -2),
+      salary: 250, remark: '后端开发岗',
+      status: 'feedback_done',
+      feedback: { result: 'pass', note: '技术能力扎实，沟通良好，建议正式入职。', date: addDays(todayStr(), -2) },
+      settlement: null, onboarding: null,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: genId(),
+      name: '陈思雨', mentor: '李主管',
+      practiceDays: 7,
+      onboardDate: addDays(todayStr(), -14),
+      endDate: addDays(todayStr(), -7),
+      salary: 200, remark: 'UI设计岗',
+      status: 'onboarded',
+      feedback: { result: 'pass', note: '设计能力强，团队协作好，通过实操。', date: addDays(todayStr(), -7) },
+      settlement: { date: addDays(todayStr(), -6), amount: 1400, note: '已办理正式入职' },
+      createdAt: new Date().toISOString(),
+    },
+  ];
+  records = demoRecords;
+  saveData();
+  render();
+}
+
+// ==================== Init ====================
+loadAccounts();
+loadLoginLogs();
+loadData();
+if (records.length === 0) {
+  loadDemoData();
+}
+// Check session: if logged in, enter app; otherwise show login
+if (loadSession()) {
+  enterApp();
+} else {
+  // Login overlay is visible by default; make sure app is hidden behind it
+  document.getElementById('loginOverlay').classList.remove('hidden');
+}
+// Enter key submits login
+document.getElementById('loginPwd').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('loginUser').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPwd').focus(); });
+</script>
+</body>
+</html>
