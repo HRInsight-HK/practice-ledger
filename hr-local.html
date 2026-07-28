@@ -147,10 +147,12 @@
   <div class="header">
     <div class="header-left">
       <div class="header-title">SSC薪资管理后台</div>
-      <div class="header-badge">本地模式 · 薪资不上云</div>
+      <div class="header-badge" id="cloudBadge">本地模式 · 薪资不上云</div>
     </div>
     <div class="header-right">
       <span class="role-tag" id="userTag"></span>
+      <span class="role-tag" id="lastSyncTag" style="color:var(--text-3);font-size:11px;"></span>
+      <button class="btn btn-default" id="syncBtn" onclick="syncFromCloud()">🔄 同步云端数据</button>
       <button class="btn btn-default" onclick="exportLocalData()">导出数据</button>
       <button class="btn btn-default" onclick="logout()">退出</button>
     </div>
@@ -392,6 +394,7 @@ function showMainApp() {
   document.getElementById('configScreen').classList.add('hidden');
   document.getElementById('mainApp').classList.remove('hidden');
   document.getElementById('userTag').textContent = currentUser.name + ' (' + currentUser.role + ')';
+  document.getElementById('cloudBadge').textContent = '已连接: ' + cloudUrl + ' · 薪资不上云';
   refreshData();
 }
 
@@ -402,6 +405,7 @@ async function refreshData() {
     renderStats();
     renderFilters();
     renderTable();
+    updateSyncTag();
   } catch(e) {
     showToast('加载数据失败: ' + e.message, 'error');
     if (e.message.includes('token') || e.message.includes('auth')) {
@@ -409,6 +413,35 @@ async function refreshData() {
     }
   }
 }
+
+function updateSyncTag() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  document.getElementById('lastSyncTag').textContent = '上次同步: ' + hh + ':' + mm;
+}
+
+async function syncFromCloud() {
+  const btn = document.getElementById('syncBtn');
+  btn.disabled = true;
+  btn.textContent = '🔄 同步中...';
+  try {
+    await refreshData();
+    showToast('已从云端同步 ' + records.length + ' 条记录', 'success');
+  } catch(e) {
+    showToast('同步失败: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 同步云端数据';
+  }
+}
+
+// 自动同步：页面重新获得焦点时刷新数据
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && jwtToken) {
+    refreshData();
+  }
+});
 
 function renderStats() {
   const stats = { total: records.length, practicing: 0, pending: 0, done: 0, settled: 0, onboarded: 0, noSalary: 0 };

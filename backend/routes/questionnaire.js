@@ -15,13 +15,14 @@ const ROLE_LABELS = {
 router.post('/', (req, res) => {
   const {
     submitterName, submitterRole, personName, mentorName,
-    businessArea, expectStart, expectDays, deviceNeed, remark
+    dept1, dept2, businessArea, expectStart, expectDays, deviceNeed, remark
   } = req.body;
 
   if (!submitterName) return res.status(400).json({ error: '请填写提交人姓名' });
   if (!submitterRole || !ROLE_LABELS[submitterRole]) return res.status(400).json({ error: '请选择您的身份' });
   if (!personName) return res.status(400).json({ error: '请填写实操人员姓名' });
   if (!mentorName) return res.status(400).json({ error: '请填写建议带教人' });
+  if (!dept1) return res.status(400).json({ error: '请填写一级部门' });
   if (!expectStart) return res.status(400).json({ error: '请选择期望开始日期' });
   if (!expectDays || expectDays < 1) return res.status(400).json({ error: '请填写有效的实操天数' });
 
@@ -33,6 +34,8 @@ router.post('/', (req, res) => {
     submitterRoleLabel: ROLE_LABELS[submitterRole],
     personName,
     mentorName,
+    dept1,
+    dept2: dept2 || '',
     businessArea: businessArea || '',
     expectStart,
     expectDays: parseInt(expectDays),
@@ -70,17 +73,20 @@ router.post('/:id/import', authMiddleware, requireRole('admin', 'hr'), (req, res
 
   // 覆盖字段（行政可修改）
   const {
-    name, mentor, startDate, practiceDays,
+    name, mentor, dept1, dept2, startDate, practiceDays,
     deviceModel, accessories, serialNumber, remark
   } = req.body;
 
   const finalName = name || q.personName;
   const finalMentor = mentor || q.mentorName;
+  const finalDept1 = dept1 || q.dept1 || '';
+  const finalDept2 = dept2 || q.dept2 || '';
   const finalStart = startDate || q.expectStart;
   const finalDays = parseInt(practiceDays) || q.expectDays;
 
   if (!finalName) return res.status(400).json({ error: '请填写实操人员姓名' });
   if (!finalMentor) return res.status(400).json({ error: '请填写带教人' });
+  if (!finalDept1) return res.status(400).json({ error: '请填写一级部门' });
   if (!finalDays || finalDays < 1) return res.status(400).json({ error: '请填写有效的实操天数' });
   if (!finalStart) return res.status(400).json({ error: '请选择开始日期' });
 
@@ -98,6 +104,8 @@ router.post('/:id/import', authMiddleware, requireRole('admin', 'hr'), (req, res
     id: 'P' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     name: finalName,
     mentor: finalMentor,
+    dept1: finalDept1,
+    dept2: finalDept2,
     startDate: finalStart,
     practiceDays: finalDays,
     endDate,

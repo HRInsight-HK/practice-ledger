@@ -368,6 +368,14 @@ tr:hover { background: var(--gray-bg); }
           <input type="text" class="form-input" id="f_mentor" placeholder="请输入带教人姓名">
         </div>
         <div class="form-group">
+          <label class="form-label">一级部门 <span class="req">*</span></label>
+          <input type="text" class="form-input" id="f_dept1" placeholder="如：市场部、运营部">
+        </div>
+        <div class="form-group">
+          <label class="form-label">二级部门 <span class="hint">（选填）</span></label>
+          <input type="text" class="form-input" id="f_dept2" placeholder="如：门店运营组">
+        </div>
+        <div class="form-group">
           <label class="form-label">实操开始日期 <span class="req">*</span></label>
           <input type="date" class="form-input" id="f_startDate">
         </div>
@@ -629,6 +637,14 @@ tr:hover { background: var(--gray-bg); }
           <input type="text" class="form-input" id="imp_mentor">
         </div>
         <div class="form-group">
+          <label class="form-label">一级部门 <span class="req">*</span></label>
+          <input type="text" class="form-input" id="imp_dept1" placeholder="如：市场部、运营部">
+        </div>
+        <div class="form-group">
+          <label class="form-label">二级部门 <span class="hint">（选填）</span></label>
+          <input type="text" class="form-input" id="imp_dept2" placeholder="如：门店运营组">
+        </div>
+        <div class="form-group">
           <label class="form-label">开始日期 <span class="req">*</span></label>
           <input type="date" class="form-input" id="imp_startDate">
         </div>
@@ -861,13 +877,13 @@ function renderTable() {
   const showSalary = canSeeSalary();
 
   // Header
-  let head = '<tr><th>实操人员</th><th>带教人</th><th>实操周期</th><th>剩余天数</th>';
+  let head = '<tr><th>实操人员</th><th>部门</th><th>带教人</th><th>实操周期</th><th>剩余天数</th>';
   if (showSalary) head += '<th>薪资结构</th>';
   head += '<th>设备</th><th>状态</th><th style="text-align:right;">操作</th></tr>';
   document.getElementById('tableHead').innerHTML = head;
 
   if (list.length === 0) {
-    document.getElementById('tableBody').innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="icon">📋</div>暂无数据</div></td></tr>';
+    document.getElementById('tableBody').innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="icon">📋</div>暂无数据</div></td></tr>';
     return;
   }
 
@@ -920,6 +936,7 @@ function renderTable() {
 
     return `<tr>
       <td style="font-weight:500;">${r.name}</td>
+      <td style="font-size:12px;">${r.dept1 || '—'}${r.dept2 ? '<br><span class="days-text">' + r.dept2 + '</span>' : ''}</td>
       <td>${r.mentor}</td>
       <td style="white-space:nowrap;">${cycle}<br><span class="days-text">${r.practiceDays}天</span></td>
       <td>${daysHtml}</td>
@@ -941,6 +958,8 @@ function openRegisterModal(id) {
     title.textContent = '编辑实操人员';
     document.getElementById('f_name').value = r.name || '';
     document.getElementById('f_mentor').value = r.mentor || '';
+    document.getElementById('f_dept1').value = r.dept1 || '';
+    document.getElementById('f_dept2').value = r.dept2 || '';
     document.getElementById('f_startDate').value = r.startDate || '';
     document.getElementById('f_days').value = r.practiceDays || '';
     document.getElementById('f_deviceModel').value = r.deviceModel || '';
@@ -949,7 +968,7 @@ function openRegisterModal(id) {
     document.getElementById('f_remark').value = r.remark || '';
   } else {
     title.textContent = '登记实操人员';
-    ['f_name','f_mentor','f_days','f_deviceModel','f_serialNumber','f_accessories','f_remark'].forEach(id => document.getElementById(id).value = '');
+    ['f_name','f_mentor','f_dept1','f_dept2','f_days','f_deviceModel','f_serialNumber','f_accessories','f_remark'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('f_startDate').value = todayStr();
   }
   showModal('registerModal');
@@ -959,6 +978,8 @@ async function saveRecord() {
   const body = {
     name: document.getElementById('f_name').value.trim(),
     mentor: document.getElementById('f_mentor').value.trim(),
+    dept1: document.getElementById('f_dept1').value.trim(),
+    dept2: document.getElementById('f_dept2').value.trim(),
     startDate: document.getElementById('f_startDate').value,
     practiceDays: parseInt(document.getElementById('f_days').value),
     deviceModel: document.getElementById('f_deviceModel').value.trim(),
@@ -968,6 +989,7 @@ async function saveRecord() {
   };
   if (!body.name) return showToast('请填写实操人员姓名', 'error');
   if (!body.mentor) return showToast('请填写带教人', 'error');
+  if (!body.dept1) return showToast('请填写一级部门', 'error');
   if (!body.practiceDays || body.practiceDays < 1) return showToast('请填写有效的实操天数', 'error');
   if (!body.startDate) return showToast('请选择实操开始日期', 'error');
 
@@ -1115,6 +1137,8 @@ function openDetail(id) {
   let html = '<div class="detail-section"><div class="detail-section-title">基本信息</div><div class="detail-grid">' +
     '<div class="detail-item"><span class="detail-label">实操人员</span><span class="detail-value">' + r.name + '</span></div>' +
     '<div class="detail-item"><span class="detail-label">带教人</span><span class="detail-value">' + r.mentor + '</span></div>' +
+    '<div class="detail-item"><span class="detail-label">一级部门</span><span class="detail-value">' + (r.dept1 || '—') + '</span></div>' +
+    '<div class="detail-item"><span class="detail-label">二级部门</span><span class="detail-value">' + (r.dept2 || '—') + '</span></div>' +
     '<div class="detail-item"><span class="detail-label">实操开始日期</span><span class="detail-value">' + r.startDate + '</span></div>' +
     '<div class="detail-item"><span class="detail-label">实操结束日期</span><span class="detail-value">' + r.endDate + '</span></div>' +
     '<div class="detail-item"><span class="detail-label">实操天数</span><span class="detail-value">' + r.practiceDays + ' 天</span></div>' +
@@ -1289,12 +1313,12 @@ async function openLogsModal() {
 function exportCSV() {
   if (records.length === 0) return showToast('暂无数据', 'error');
   const seeSalary = canSeeSalary();
-  let headers = ['实操人员', '带教人', '开始日期', '结束日期', '天数', '设备型号', '配件', '序列号', '状态'];
+  let headers = ['实操人员', '一级部门', '二级部门', '带教人', '开始日期', '结束日期', '天数', '设备型号', '配件', '序列号', '状态'];
   if (seeSalary) headers = headers.concat(['薪资结构', '基本工资', '补贴', '反馈结果', '反馈日期', '结算日期', '结算金额', '入职日期', '入职耗时(天)']);
 
   const rows = records.map(r => {
     const cfg = STATUS_CONFIG[r.status] || { label: r.status };
-    let row = [r.name, r.mentor, r.startDate, r.endDate, r.practiceDays, r.deviceModel, r.accessories, r.serialNumber, cfg.label];
+    let row = [r.name, r.dept1 || '', r.dept2 || '', r.mentor, r.startDate, r.endDate, r.practiceDays, r.deviceModel, r.accessories, r.serialNumber, cfg.label];
     if (seeSalary) {
       row = row.concat([
         r.salaryStructure || '',
@@ -1414,6 +1438,8 @@ function openImportModal(qId) {
 
   document.getElementById('imp_name').value = q.personName;
   document.getElementById('imp_mentor').value = q.mentorName;
+  document.getElementById('imp_dept1').value = q.dept1 || '';
+  document.getElementById('imp_dept2').value = q.dept2 || '';
   document.getElementById('imp_startDate').value = q.expectStart;
   document.getElementById('imp_days').value = q.expectDays;
   document.getElementById('imp_deviceModel').value = q.deviceNeed || '';
@@ -1429,6 +1455,8 @@ async function confirmImport() {
   const body = {
     name: document.getElementById('imp_name').value.trim(),
     mentor: document.getElementById('imp_mentor').value.trim(),
+    dept1: document.getElementById('imp_dept1').value.trim(),
+    dept2: document.getElementById('imp_dept2').value.trim(),
     startDate: document.getElementById('imp_startDate').value,
     practiceDays: parseInt(document.getElementById('imp_days').value),
     deviceModel: document.getElementById('imp_deviceModel').value.trim(),
@@ -1438,6 +1466,7 @@ async function confirmImport() {
   };
   if (!body.name) return showToast('请填写实操人员姓名', 'error');
   if (!body.mentor) return showToast('请填写带教人', 'error');
+  if (!body.dept1) return showToast('请填写一级部门', 'error');
   if (!body.practiceDays || body.practiceDays < 1) return showToast('请填写有效的实操天数', 'error');
   if (!body.startDate) return showToast('请选择开始日期', 'error');
 

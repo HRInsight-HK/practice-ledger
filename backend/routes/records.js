@@ -57,6 +57,8 @@ function filterRecord(r, role) {
     id: r.id,
     name: r.name,
     mentor: r.mentor,
+    dept1: r.dept1 || '',
+    dept2: r.dept2 || '',
     startDate: r.startDate,
     practiceDays: r.practiceDays,
     endDate: r.endDate,
@@ -100,9 +102,10 @@ router.get('/', authMiddleware, (req, res) => {
 });
 
 router.post('/', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
-  const { name, mentor, startDate, practiceDays, deviceModel, accessories, serialNumber, remark } = req.body;
+  const { name, mentor, dept1, dept2, startDate, practiceDays, deviceModel, accessories, serialNumber, remark } = req.body;
   if (!name) return res.status(400).json({ error: '请填写实操人员姓名' });
   if (!mentor) return res.status(400).json({ error: '请填写带教人' });
+  if (!dept1) return res.status(400).json({ error: '请填写一级部门' });
   if (!practiceDays || practiceDays < 1) return res.status(400).json({ error: '请填写有效的实操天数' });
   if (!startDate) return res.status(400).json({ error: '请选择实操开始日期' });
 
@@ -116,6 +119,8 @@ router.post('/', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
     id: 'P' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     name,
     mentor,
+    dept1,
+    dept2: dept2 || '',
     startDate,
     practiceDays: parseInt(practiceDays),
     endDate,
@@ -149,9 +154,11 @@ router.put('/:id', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
   const r = data.records.find(x => x.id === req.params.id);
   if (!r) return res.status(404).json({ error: '记录不存在' });
 
-  const { name, mentor, startDate, practiceDays, deviceModel, accessories, serialNumber, remark } = req.body;
+  const { name, mentor, dept1, dept2, startDate, practiceDays, deviceModel, accessories, serialNumber, remark } = req.body;
   if (name !== undefined) r.name = name;
   if (mentor !== undefined) r.mentor = mentor;
+  if (dept1 !== undefined) r.dept1 = dept1;
+  if (dept2 !== undefined) r.dept2 = dept2;
   if (startDate !== undefined) r.startDate = startDate;
   if (practiceDays !== undefined) {
     r.practiceDays = parseInt(practiceDays);

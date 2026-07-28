@@ -87,6 +87,16 @@
     </div>
     <div class="form-grid">
       <div class="form-group">
+        <label class="form-label">一级部门 <span class="req">*</span></label>
+        <input type="text" class="form-input" id="dept1" placeholder="如：市场部、运营部">
+      </div>
+      <div class="form-group">
+        <label class="form-label">二级部门 <span class="hint">（选填）</span></label>
+        <input type="text" class="form-input" id="dept2" placeholder="如：门店运营组">
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
         <label class="form-label">期望开始日期 <span class="req">*</span></label>
         <input type="date" class="form-input" id="expectStart">
       </div>
@@ -133,6 +143,8 @@ async function submitForm() {
     submitterRole: selectedRole,
     personName: document.getElementById('personName').value.trim(),
     mentorName: document.getElementById('mentorName').value.trim(),
+    dept1: document.getElementById('dept1').value.trim(),
+    dept2: document.getElementById('dept2').value.trim(),
     businessArea: document.getElementById('businessArea').value.trim(),
     expectStart: document.getElementById('expectStart').value,
     expectDays: parseInt(document.getElementById('expectDays').value) || 0,
@@ -144,6 +156,7 @@ async function submitForm() {
   if (!data.submitterRole) return showError('请选择您的身份');
   if (!data.personName) return showError('请填写实操人员姓名');
   if (!data.mentorName) return showError('请填写建议带教人');
+  if (!data.dept1) return showError('请填写一级部门');
   if (!data.expectStart) return showError('请选择期望开始日期');
   if (!data.expectDays || data.expectDays < 1) return showError('请填写有效的实操天数');
 
@@ -176,6 +189,8 @@ async function submitForm() {
           <div class="row"><span>提交人</span><span>${data.submitterName}（${roleText}）</span></div>
           <div class="row"><span>实操人员</span><span>${data.personName}</span></div>
           <div class="row"><span>建议带教人</span><span>${data.mentorName}</span></div>
+          <div class="row"><span>一级部门</span><span>${data.dept1}</span></div>
+          ${data.dept2 ? `<div class="row"><span>二级部门</span><span>${data.dept2}</span></div>` : ''}
           <div class="row"><span>期望开始</span><span>${data.expectStart}</span></div>
           <div class="row"><span>预计天数</span><span>${data.expectDays} 天</span></div>
           ${data.businessArea ? `<div class="row"><span>业务方向</span><span>${data.businessArea}</span></div>` : ''}
