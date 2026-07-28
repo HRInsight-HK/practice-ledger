@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const { loadData } = require('./lib/db');
 const { startScheduler } = require('./lib/wecom-bot');
 
@@ -17,9 +18,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// Ensure uploads directory exists
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/records', require('./routes/records'));
