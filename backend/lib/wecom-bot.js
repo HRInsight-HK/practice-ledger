@@ -210,6 +210,20 @@ function notifyDeadlineOverdue(r, days) {
   sendText(content, ['@all']);
 }
 
+// ==================== >7天用工风险预警（定时检查） ====================
+
+function notifyOver7Days(r) {
+  const content = [
+    '⚠️【用工风险预警 - 实操天数超过7天】',
+    r.name + '的实操天数为' + r.practiceDays + '天，超过' + MAX_PRACTICE_DAYS + '天建议上限。',
+    '带教人：' + r.mentor,
+    '实操周期：' + r.startDate + ' ~ ' + r.endDate,
+    '请管理层关注用工风险，建议尽快安排结束实操或转为正式入职。'
+  ].join('\n');
+  // >7天预警 @全员
+  sendText(content, ['@all']);
+}
+
 // ==================== 定时检查 ====================
 
 function checkAndNotifyDeadlines() {
@@ -217,7 +231,17 @@ function checkAndNotifyDeadlines() {
   const data = getData();
   const today = new Date().toISOString().slice(0, 10);
 
+  let notifications = 0;
+
   data.records.forEach(r => {
+    // >7天用工风险预警（对所有 practicing 记录检查）
+    if (r.status === 'practicing' && r.practiceDays > MAX_PRACTICE_DAYS && !r.notified_over7) {
+      notifyOver7Days(r);
+      r.notified_over7 = true;
+      saveDataQuiet();
+      notifications++;
+    }
+
     if (r.status !== 'practicing' && r.status !== 'feedback_pending') return;
 
     const daysDiff = Math.round((new Date(r.endDate) - new Date(today)) / 86400000);
@@ -227,6 +251,7 @@ function checkAndNotifyDeadlines() {
       notifyDeadline3Day(r);
       r.notified_t3 = true;
       saveDataQuiet();
+      notifications++;
     }
 
     // T-1: @SSC 再次提醒
@@ -234,6 +259,7 @@ function checkAndNotifyDeadlines() {
       notifyDeadline1Day(r);
       r.notified_t1 = true;
       saveDataQuiet();
+      notifications++;
     }
 
     // T-0: 到期当天通知组长 + @SSC
@@ -241,6 +267,7 @@ function checkAndNotifyDeadlines() {
       notifyDeadlineToday(r);
       r.notified_t0 = true;
       saveDataQuiet();
+      notifications++;
     }
 
     // T+3: 逾期3天 @全员
@@ -248,8 +275,26 @@ function checkAndNotifyDeadlines() {
       notifyDeadlineOverdue(r, 3);
       r.notified_overdue3 = true;
       saveDataQuiet();
+      notifications++;
     }
   });
+
+  if (notifications > 0) {
+    console.log('[Scheduler] Sent ' + notifications + ' notification(s) this check');
+  }
+  return notifications;
+}
+
+// 诊断函数：返回当前环境变量配置状态
+function getDiagnosticInfo() {
+  return {
+    webhookConfigured: !!WEBHOOK_URL,
+    cloudBaseUrl: CLOUD_BASE_URL || '(empty)',
+    hrUserId: HR_USERID || '(empty)',
+    managerUserId: MANAGER_USERID || '(empty)',
+    adminUserId: ADMIN_USERID || '(empty)',
+    maxPracticeDays: MAX_PRACTICE_DAYS
+  };
 }
 
 let saveTimer = null;
@@ -302,6 +347,8 @@ module.exports = {
   notifyDeadline1Day,
   notifyDeadlineToday,
   notifyDeadlineOverdue,
+  notifyOver7Days,
   checkAndNotifyDeadlines,
+  getDiagnosticInfo,
   startScheduler
 };
