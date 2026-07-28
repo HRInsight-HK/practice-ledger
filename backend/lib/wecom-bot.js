@@ -90,14 +90,14 @@ function notifyRecordCreated(r) {
     '请SSC及时在系统上填写薪资信息'
   ].join('\n');
 
-  // 实操天数超过7天，追加风险预警
-  if (r.practiceDays > MAX_PRACTICE_DAYS) {
-    content += '\n⚠️ 实操天数为' + r.practiceDays + '天，超过' + MAX_PRACTICE_DAYS + '天建议上限，存在用工风险，请管理层关注！';
-  }
-
-  // 行政登记后专门@行政人员（青霖）
+  // 行政登记后专门@行政人员
   const mentioned = ADMIN_USERID ? [ADMIN_USERID] : ['@all'];
   sendText(content, mentioned);
+
+  // 实操天数超过7天，单独发送风险预警 @HRD + @全员
+  if (r.practiceDays > MAX_PRACTICE_DAYS) {
+    notifyOver7Days(r);
+  }
 }
 
 // ==================== @SSC 通知（实操跟进） ====================
@@ -218,10 +218,12 @@ function notifyOver7Days(r) {
     r.name + '的实操天数为' + r.practiceDays + '天，超过' + MAX_PRACTICE_DAYS + '天建议上限。',
     '带教人：' + r.mentor,
     '实操周期：' + r.startDate + ' ~ ' + r.endDate,
-    '请管理层关注用工风险，建议尽快安排结束实操或转为正式入职。'
+    '请HRD关注用工风险，建议尽快安排结束实操或转为正式入职。',
+    'SSC请跟进薪资核算及反馈结果收集事宜。'
   ].join('\n');
-  // >7天预警 @全员
-  sendText(content, ['@all']);
+  // >7天预警 @HRD + @全员
+  const mentioned = MANAGER_USERID ? [MANAGER_USERID, '@all'] : ['@all'];
+  sendText(content, mentioned);
 }
 
 // ==================== 定时检查 ====================
