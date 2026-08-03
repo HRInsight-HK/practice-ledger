@@ -336,7 +336,7 @@ tr:hover { background: var(--gray-bg); }
     <div class="toolbar">
       <input type="text" class="search-box" id="searchBox" placeholder="搜索姓名或带教人..." oninput="renderTable()">
       <div class="toolbar-right">
-        <button class="btn btn-default" id="btnQuestionnaire" style="display:none;" onclick="openQuestionnaireModal()">📋 问卷需求</button>
+        <button class="btn btn-default" id="btnQuestionnaire" style="display:none;position:relative;" onclick="openQuestionnaireModal()">📋 问卷需求<span id="qBadge" style="display:none;background:#dc2626;color:#fff;font-size:10px;border-radius:10px;padding:1px 6px;position:absolute;top:-6px;right:-6px;">0</span></button>
         <button class="btn btn-default" onclick="exportCSV()">📄 导出</button>
         <button class="btn btn-primary" id="btnRegister" onclick="openRegisterModal()">＋ 登记实操人员</button>
       </div>
@@ -787,6 +787,38 @@ async function showApp() {
   document.getElementById('btnQuestionnaire').style.display = (currentUser.role === 'admin' || isHR || isManager) ? '' : 'none';
 
   await loadRecords();
+  await checkPendingQuestionnaires();
+  startAutoRefresh();
+}
+
+// 自动检查待处理问卷数量，更新徽章
+let pendingQCount = 0;
+async function checkPendingQuestionnaires() {
+  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'hr' && currentUser.role !== 'manager')) return;
+  try {
+    const data = await api('GET', '/questionnaire');
+    pendingQCount = (data.questionnaires || []).filter(q => q.status === 'pending').length;
+    const badge = document.getElementById('qBadge');
+    if (badge) {
+      if (pendingQCount > 0) {
+        badge.textContent = pendingQCount;
+        badge.style.display = '';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+  } catch(e) { /* 静默失败 */ }
+}
+
+// 定时自动刷新：每30秒刷新数据和问卷计数
+let refreshTimer = null;
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(async () => {
+    if (document.hidden) return;
+    await loadRecords();
+    await checkPendingQuestionnaires();
+  }, 30000);
 }
 
 // ==================== Records ====================
@@ -804,6 +836,31 @@ function isHR() { return currentUser && currentUser.role === 'hr'; }
 function isManager() { return currentUser && currentUser.role === 'manager'; }
 function canEdit() { return currentUser && (currentUser.role === 'admin' || currentUser.role === 'hr'); }
 function canSeeSalary() { return currentUser && (currentUser.role === 'hr' || currentUser.role === 'manager'); }
+
+// 复制反馈链接到剪贴板
+function copyFeedbackLink(token) {
+  const link = window.location.origin + '/feedback/' + token;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(link).then(() => {
+      showToast('反馈链接已复制！可直接粘贴发给带教人', 'success');
+    }).catch(() => {
+      fallbackCopyText(link);
+    });
+  } else {
+    fallbackCopyText(link);
+  }
+}
+function fallbackCopyText(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showToast('反馈链接已复制！', 'success'); }
+  catch(e) { showToast('请手动复制：' + text, 'error'); }
+  document.body.removeChild(ta);
+}
 
 function renderAll() {
   renderStats();
@@ -928,6 +985,10 @@ function renderTable() {
           actions += `<button class="btn-text btn-sm" onclick="openSettlement('${r.id}','settle')">办理结算</button>`;
         }
       }
+    }
+    // 反馈链接：所有角色可复制，发给带教人填写
+    if ((r.status === 'practicing' || r.status === 'feedback_pending') && r.feedbackToken) {
+      actions += `<button class="btn-text btn-sm" onclick="copyFeedbackLink('${r.feedbackToken}')">📋反馈链接</button>`;
     }
     if (isHR() || isManager()) {
       actions += `<button class="btn-text btn-sm btn-danger-text" onclick="deleteRecord('${r.id}')">删除</button>`;
@@ -1126,8 +1187,8 @@ function openDetail(id) {
   const steps = [
     { title: '行政登记', desc: r.startDate + ' 登记', done: true },
     { title: '实操进行中', desc: r.status === 'practicing' ? '预计 ' + r.endDate + ' 结束' : '已于 ' + r.endDate + ' 结束', done: r.status !== 'practicing', current: r.status === 'practicing' },
-    { title: '带教反馈', desc: seeSalary && r.feedback ? (r.feedback.result === 'pass' ? '通过' : '不通过') + ' (' + r.feedback.date + ')' : (r.hasFeedback ? '已反馈' : '待反馈'), done: !!r.feedback || r.hasFeedback, current: r.status === 'feedback_pending' },
-    { title: r.feedback && r.feedback.result === 'pass' ? '办理入职' : '办理结算', desc: seeSalary ? (r.settlement ? '已于 ' + r.settlement.date + ' 办理' : r.onboarding ? '已于 ' + r.onboarding.date + ' 入职' : '人事待处理') : (r.hasSettlement || r.hasOnboarding ? '已办理' : '待处理'), done: r.status === 'settled' || r.status === 'onboarded', current: r.status === 'feedback_done' },
+    { title: '带教反馈', desc: r.feedback ? (r.feedback.result === 'pass' ? '通过' : '不通过') + ' (' + r.feedback.date + ')' : (r.hasFeedback ? '已反馈' : '待反馈'), done: !!r.feedback || r.hasFeedback, current: r.status === 'feedback_pending' },
+    { title: r.feedback && r.feedback.result === 'pass' ? '办理入职' : '办理结算', desc: r.settlement ? '已于 ' + r.settlement.date + ' 办理' : r.onboarding ? '已于 ' + r.onboarding.date + ' 入职' : '待处理', done: r.status === 'settled' || r.status === 'onboarded', current: r.status === 'feedback_done' },
   ];
   const timelineHtml = '<div class="timeline">' + steps.map(s =>
     `<div class="timeline-step ${s.done ? 'done' : ''} ${s.current ? 'current' : ''}"><div class="timeline-dot">${s.done ? '&#x2713;' : s.current ? '&#x25CF;' : ''}</div><div class="timeline-title">${s.title}</div><div class="timeline-desc">${s.desc}</div></div>`
@@ -1475,6 +1536,11 @@ async function confirmImport() {
     showToast('已导入并登记成功', 'success');
     closeModal('importModal');
     await loadRecords();
+    await checkPendingQuestionnaires();
+    // 刷新问卷弹窗（如果开着的话）
+    if (document.getElementById('questionnaireModal').classList.contains('show')) {
+      await openQuestionnaireModal();
+    }
   } catch (e) {
     showToast(e.message, 'error');
   }

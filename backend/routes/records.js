@@ -76,7 +76,7 @@ function filterRecord(r, role) {
   };
 
   if (role === 'admin') {
-    return base;
+    return { ...base, feedback: r.feedback || null, settlement: r.settlement || null, onboarding: r.onboarding || null, feedbackToken: r.feedbackToken || '' };
   }
 
   const full = {

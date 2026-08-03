@@ -25,6 +25,13 @@ function warningBox(t) {
 function tipBox(t) {
   return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [new TableRow({ children: [new TableCell({ shading: { type: ShadingType.CLEAR, color: 'auto', fill: LIGHT_BG }, margins: { top: 80, bottom: 80, left: 160, right: 160 }, children: [new Paragraph({ children: [new TextRun({ text: t, size: 21, font: FONT, color: BLUE })] })] })] })] });
 }
+const GREEN_BG = 'd1fae5', GREEN_TEXT = '065f46';
+function statusBadge() {
+  return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [new TableRow({ children: [new TableCell({ shading: { type: ShadingType.CLEAR, color: 'auto', fill: GREEN_BG }, margins: { top: 60, bottom: 60, left: 160, right: 160 }, children: [new Paragraph({ children: [new TextRun({ text: '✅ 该系统已投入运行  |  云端地址：' + CLOUD_URL, size: 20, font: FONT, color: GREEN_TEXT, bold: true })] })] })] })] });
+}
+function authorLine() {
+  return new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 40, after: 60 }, children: [new TextRun({ text: '整理：Zoe（SSC）', size: 18, color: GRAY, font: FONT, italics: true })] });
+}
 
 function thCell(t, w) {
   return new TableCell({ width: { size: w, type: WidthType.PERCENTAGE }, shading: { type: ShadingType.CLEAR, color: 'auto', fill: BLUE }, margins: { top: 60, bottom: 60, left: 80, right: 80 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: t, bold: true, size: 20, color: 'FFFFFF', font: FONT })] })] });
@@ -70,7 +77,10 @@ const NOTIFICATIONS = [
 function createSOP() {
   return makeDoc([
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 80 }, children: [new TextRun({ text: '实操人员全流程管理SOP', bold: true, size: 40, color: BLUE, font: FONT })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 200 }, children: [new TextRun({ text: 'Version 3.1  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: 'Version 3.2  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    authorLine(),
+    statusBadge(),
+    emptyLine(),
 
     h1('一、角色与人员'),
     p('本系统涉及4个角色，各角色对应人员及系统账号如下：'),
@@ -157,14 +167,17 @@ function createSOP() {
     bullet('所有操作留痕，系统记录操作人、时间、来源'),
     emptyLine(),
     tipBox('系统已部署到云端：' + CLOUD_URL + ' 。问卷表单地址：' + Q_URL + ' 。'),
-  ], '实操人员管理SOP v3.1');
+  ], '实操人员管理SOP v3.2');
 }
 
 // ==================== Document 2: 领导决策摘要 ====================
 function createLeadershipGuide() {
   return makeDoc([
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 300, after: 80 }, children: [new TextRun({ text: '实操台账系统', bold: true, size: 44, color: BLUE, font: FONT })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 300 }, children: [new TextRun({ text: '领导决策摘要', size: 24, color: GRAY, font: FONT })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: '领导决策摘要', size: 24, color: GRAY, font: FONT })] }),
+    authorLine(),
+    statusBadge(),
+    emptyLine(),
 
     h2('核心价值'),
     p('一套系统解决实操人员从需求到入职的全流程管理，自动驱动各角色按时完成操作，杜绝信息不同步、反馈遗漏、用工风险。'),
@@ -243,14 +256,17 @@ function createLeadershipGuide() {
       ], [25, 25, 25, 25]),
     emptyLine(),
     tipBox('系统已部署上线：' + CLOUD_URL),
-  ], '领导决策摘要 v3.1');
+  ], '领导决策摘要 v3.2');
 }
 
 // ==================== Document 3: 需求方操作SOP ====================
 function createRequesterSOP() {
   return makeDoc([
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 80 }, children: [new TextRun({ text: '需求方操作SOP', bold: true, size: 36, color: BLUE, font: FONT })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 200 }, children: [new TextRun({ text: 'Version 3.1  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: 'Version 3.2  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    authorLine(),
+    statusBadge(),
+    emptyLine(),
 
     h2('一、适用对象'),
     p('组长、管理层（需求方），即需要安排实操人员的人员。'),
@@ -307,14 +323,17 @@ function createRequesterSOP() {
     bullet('如有紧急需求，直接联系行政（莫青霖）或SSC（Zoe）'),
     emptyLine(),
     tipBox('紧急联系方式：行政 莫青霖 / SSC Zoe（通过企微群联系）'),
-  ], '需求方操作SOP v3.1');
+  ], '需求方操作SOP v3.2');
 }
 
 // ==================== Document 4: 行政操作SOP ====================
 function createAdminSOP() {
   return makeDoc([
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 80 }, children: [new TextRun({ text: '行政操作SOP', bold: true, size: 36, color: BLUE, font: FONT })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 200 }, children: [new TextRun({ text: 'Version 3.1  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: 'Version 3.2  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    authorLine(),
+    statusBadge(),
+    emptyLine(),
 
     h2('一、适用对象'),
     p('行政人员（莫青霖），负责实操人员的登记和设备管理。'),
@@ -385,14 +404,17 @@ function createAdminSOP() {
         ['入职/结算', '-', '办理入职或结算', '收到@HRD通知'],
         ['风险预警', '关注>7天预警', '-', '关注逾期3天预警'],
       ], [15, 30, 30, 25]),
-  ], '行政操作SOP v3.1');
+  ], '行政操作SOP v3.2');
 }
 
 // ==================== Document 5: SSC操作SOP ====================
 function createSSCSOP() {
   return makeDoc([
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 80 }, children: [new TextRun({ text: 'SSC操作SOP', bold: true, size: 36, color: BLUE, font: FONT })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 200 }, children: [new TextRun({ text: 'Version 3.1  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: 'Version 3.2  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    authorLine(),
+    statusBadge(),
+    emptyLine(),
 
     h2('一、适用对象'),
     p('SSC（Zoe），负责实操期间的薪资录入、反馈跟进、入职/结算办理。'),
@@ -514,14 +536,17 @@ function createSSCSOP() {
     bullet('SSC可查看登录日志，审计设备使用情况'),
     emptyLine(),
     tipBox('本地SSC工具地址：http://localhost:8080/hr-local.html（需先执行 python -m http.server 8080 启动）。云端后台地址：' + CLOUD_URL),
-  ], 'SSC操作SOP v3.1');
+  ], 'SSC操作SOP v3.2');
 }
 
 // ==================== Document 6: 系统操作指南(完整版) ====================
 function createFullGuide() {
   return makeDoc([
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 80 }, children: [new TextRun({ text: '实操台账系统操作指南', bold: true, size: 40, color: BLUE, font: FONT })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 200 }, children: [new TextRun({ text: '完整版  |  Version 3.1  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: '完整版  |  Version 3.2  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    authorLine(),
+    statusBadge(),
+    emptyLine(),
 
     h1('一、系统概述'),
     p('实操台账管理系统是一套面向实操人员全流程管理的云端系统，覆盖从需求提交、行政登记、薪资录入、到期跟进、反馈记录到入职/结算的完整流程。系统通过企微群机器人自动驱动各角色按时完成操作。'),
@@ -643,7 +668,7 @@ function createFullGuide() {
       ], [20, 25, 25, 30]),
     emptyLine(),
     tipBox('系统已部署上线：' + CLOUD_URL + ' 。问卷表单地址：' + Q_URL + ' 。'),
-  ], '系统操作指南(完整版) v3.1');
+  ], '系统操作指南(完整版) v3.2');
 }
 
 // ==================== Generate All ====================
