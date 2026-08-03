@@ -990,7 +990,7 @@ function renderTable() {
     if ((r.status === 'practicing' || r.status === 'feedback_pending') && r.feedbackToken) {
       actions += `<button class="btn-text btn-sm" onclick="copyFeedbackLink('${r.feedbackToken}')">📋反馈链接</button>`;
     }
-    if (isHR() || isManager()) {
+    if (currentUser.role === 'admin' || isHR() || isManager()) {
       actions += `<button class="btn-text btn-sm btn-danger-text" onclick="deleteRecord('${r.id}')">删除</button>`;
     }
     actions += '</div>';

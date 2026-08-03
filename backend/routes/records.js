@@ -174,7 +174,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
   res.json({ success: true, record: filterRecord(r, req.user.role) });
 });
 
-router.delete('/:id', authMiddleware, requireRole('hr', 'manager'), (req, res) => {
+router.delete('/:id', authMiddleware, requireRole('admin', 'hr', 'manager'), (req, res) => {
   const data = getData();
   const idx = data.records.findIndex(x => x.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: '记录不存在' });
