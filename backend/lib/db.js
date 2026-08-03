@@ -64,80 +64,95 @@ function getDefaultData() {
 let data = null;
 let mongoClient = null;
 let useMongo = false;
+let mongoHealthy = false;  // 健康状态
 
-// File-based fallback
+// File-based fallback（仅在 MONGODB_URI 未配置时使用）
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
-if (!fs.existsSync(DATA_DIR)) {
+if (!MONGODB_URI && !fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+async function connectMongo() {
+  if (mongoClient && mongoHealthy) return mongoClient;
+  const { MongoClient } = require('mongodb');
+  mongoClient = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
+  await mongoClient.connect();
+  mongoHealthy = true;
+  return mongoClient;
 }
 
 async function loadData() {
   if (MONGODB_URI) {
+    // 强制使用MongoDB，不降级到文件存储（防止数据丢失）
     try {
-      const { MongoClient } = require('mongodb');
-      mongoClient = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 10000 });
-      await mongoClient.connect();
+      await connectMongo();
       const db = mongoClient.db(DB_NAME);
       const coll = db.collection(COLL_NAME);
       const doc = await coll.findOne({ _id: 'main' });
       if (!doc) {
         data = getDefaultData();
         await coll.insertOne({ _id: 'main', data });
-        console.log('[DB] MongoDB: 初始化种子数据');
+        console.log('[DB] MongoDB: 初始化种子数据 records=0');
       } else {
         data = doc.data;
-        console.log('[DB] MongoDB: 加载成功, records=' + (data.records ? data.records.length : 0));
+        console.log('[DB] MongoDB: 加载成功 records=' + (data.records ? data.records.length : 0));
       }
       useMongo = true;
       return data;
     } catch (e) {
-      console.error('[DB] MongoDB连接失败，降级为文件存储:', e.message);
-      mongoClient = null;
+      // MongoDB失败时，保留内存数据，宁可报错也不覆盖MongoDB数据
+      console.error('[DB] MongoDB连接失败:', e.message);
+      mongoHealthy = false;
+      throw new Error('数据库连接失败，请稍后重试');
     }
   }
 
-  // File-based fallback
+  // 文件存储（仅在 MONGODB_URI 未配置时使用）
   if (!fs.existsSync(DB_FILE)) {
     data = getDefaultData();
-    saveFileSync();
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
   } else {
     data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
   }
-  console.log('[DB] 文件存储: 加载成功, records=' + (data.records ? data.records.length : 0));
+  console.log('[DB] 文件存储: 加载成功 records=' + (data.records ? data.records.length : 0));
   return data;
 }
 
 async function saveData() {
   if (!data) return;
-  if (useMongo && mongoClient) {
-    try {
-      const db = mongoClient.db(DB_NAME);
-      const coll = db.collection(COLL_NAME);
-      await coll.updateOne({ _id: 'main' }, { $set: { data } });
-      return;
-    } catch (e) {
-      console.error('[DB] MongoDB保存失败，降级为文件存储:', e.message);
-    }
-  }
-  saveFileSync();
-}
 
-function saveFileSync() {
-  if (!data) return;
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+  if (useMongo && MONGODB_URI) {
+    // 重试3次，每次间隔增加
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        if (!mongoHealthy) await connectMongo();
+        const db = mongoClient.db(DB_NAME);
+        const coll = db.collection(COLL_NAME);
+        await coll.updateOne({ _id: 'main' }, { $set: { data } });
+        return;  // 成功
+      } catch (e) {
+        console.error(`[DB] MongoDB保存失败(第${attempt}次):`, e.message);
+        mongoHealthy = false;
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 1000 * attempt));  // 等待后重试
+        } else {
+          throw new Error('数据保存失败，请稍后重试');
+        }
+      }
+    }
+  } else if (!MONGODB_URI) {
+    // 仅在未配置MongoDB时使用文件存储
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+  } else {
+    throw new Error('数据库不可用，请稍后重试');
+  }
 }
 
 function getData() {
   if (!data) {
-    // 同步fallback：如果MongoDB还没加载完，用文件或种子数据
-    if (fs.existsSync(DB_FILE)) {
-      data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-    } else {
-      data = getDefaultData();
-      saveFileSync();
-    }
+    throw new Error('数据库尚未加载完成');
   }
   return data;
 }
@@ -146,6 +161,7 @@ async function closeDb() {
   if (mongoClient) {
     await mongoClient.close();
     mongoClient = null;
+    mongoHealthy = false;
   }
 }
 
