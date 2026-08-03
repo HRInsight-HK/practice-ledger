@@ -1269,6 +1269,10 @@ function openDetail(id) {
 
   // Footer
   let footer = '<button class="btn btn-default" onclick="closeModal(\'detailModal\')">关闭</button>';
+  // 反馈链接：所有角色可复制，发给带教人填写
+  if ((r.status === 'practicing' || r.status === 'feedback_pending') && r.feedbackToken) {
+    footer += '<button class="btn btn-default" onclick="copyFeedbackLink(\'' + r.feedbackToken + '\')">📋 反馈链接</button>';
+  }
   if (canEdit()) {
     footer += '<button class="btn btn-default" onclick="closeModal(\'detailModal\');openRegisterModal(\'' + r.id + '\')">编辑</button>';
   }
