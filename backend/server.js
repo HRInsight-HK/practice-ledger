@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { loadData } = require('./lib/db');
+const { loadData, closeDb } = require('./lib/db');
 const { startScheduler, checkAndNotifyDeadlines, getDiagnosticInfo } = require('./lib/wecom-bot');
 
 const app = express();
@@ -117,16 +117,17 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: '服务器内部错误' });
 });
 
-loadData();
-startScheduler();
-
-app.listen(PORT, () => {
-  const diag = getDiagnosticInfo();
-  console.log('========================================');
-  console.log('  实操台账管理系统已启动');
-  console.log('  地址: http://localhost:' + PORT);
-  console.log('  问卷表单: http://localhost:' + PORT + '/questionnaire');
-  console.log('  账号:');
+// 启动：先连接MongoDB再加载数据，然后启动HTTP服务
+loadData().then(() => {
+  startScheduler();
+  app.listen(PORT, () => {
+    const diag = getDiagnosticInfo();
+    console.log('========================================');
+    console.log('  实操台账管理系统已启动');
+    console.log('  地址: http://localhost:' + PORT);
+    console.log('  问卷表单: http://localhost:' + PORT + '/questionnaire');
+    console.log('  数据存储: ' + (process.env.MONGODB_URI ? 'MongoDB Atlas (持久化)' : '文件存储 (临时)'));
+    console.log('  账号:');
   console.log('    行政: admin (莫青霖)');
   console.log('    SSC:  hr (Zoe)');
   console.log('    HRD:  manager (massie)');
@@ -139,4 +140,18 @@ app.listen(PORT, () => {
   console.log('  诊断端点: /api/diagnostic');
   console.log('  手动检查: /api/trigger-check');
   console.log('========================================');
+  });
+}).catch(e => {
+  console.error('启动失败:', e.message);
+  process.exit(1);
+});
+
+// 优雅关闭
+process.on('SIGTERM', async () => {
+  await closeDb();
+  process.exit(0);
+});
+process.on('SIGINT', async () => {
+  await closeDb();
+  process.exit(0);
 });

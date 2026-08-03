@@ -302,11 +302,11 @@ function getDiagnosticInfo() {
 let saveTimer = null;
 function saveDataQuiet() {
   if (saveTimer) return;
-  saveTimer = setTimeout(() => {
+  saveTimer = setTimeout(async () => {
     saveTimer = null;
     try {
       const { saveData } = require('../lib/db');
-      saveData();
+      await saveData();
     } catch (e) {
       console.error('[Deadline Check] Save error:', e.message);
     }

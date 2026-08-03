@@ -34,7 +34,7 @@ router.post('/login', (req, res) => {
   if (data.loginLogs.length > 500) {
     data.loginLogs = data.loginLogs.slice(-500);
   }
-  saveData();
+  await saveData();
 
   const token = generateToken(acc);
   res.json({
@@ -98,7 +98,7 @@ router.post('/accounts', authMiddleware, requireRole('hr', 'manager'), (req, res
     createdAt: new Date().toISOString()
   };
   data.accounts.push(acc);
-  saveData();
+  await saveData();
   res.json({ success: true, account: { ...acc, password: undefined } });
 });
 
@@ -113,7 +113,7 @@ router.put('/accounts/:id', authMiddleware, requireRole('manager'), (req, res) =
   if (role && ['admin', 'hr', 'manager'].includes(role)) acc.role = role;
   if (active !== undefined) acc.active = active;
   if (password) acc.password = hashPassword(password);
-  saveData();
+  await saveData();
   res.json({ success: true });
 });
 
@@ -125,7 +125,7 @@ router.delete('/accounts/:id', authMiddleware, requireRole('manager'), (req, res
     return res.status(400).json({ error: '不能删除管理员账号' });
   }
   data.accounts.splice(idx, 1);
-  saveData();
+  await saveData();
   res.json({ success: true });
 });
 

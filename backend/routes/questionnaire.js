@@ -47,7 +47,7 @@ router.post('/', (req, res) => {
 
   if (!data.questionnaires) data.questionnaires = [];
   data.questionnaires.push(entry);
-  saveData();
+  await saveData();
 
   // 企微群通知：有新问卷提交
   notifyQuestionnaireSubmitted(entry);
@@ -133,7 +133,7 @@ router.post('/:id/import', authMiddleware, requireRole('admin', 'hr'), (req, res
   q.importedAt = new Date().toISOString();
   q.importedBy = req.user.username;
 
-  saveData();
+  await saveData();
 
   // 企微通知：新实操人员已登记
   const { notifyRecordCreated } = require('../lib/wecom-bot');
@@ -149,7 +149,7 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'hr'), (req, res) => 
   const idx = data.questionnaires.findIndex(x => x.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: '问卷不存在' });
   data.questionnaires.splice(idx, 1);
-  saveData();
+  await saveData();
   res.json({ success: true });
 });
 

@@ -138,7 +138,7 @@ router.post('/', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
     updatedAt: new Date().toISOString()
   };
   data.records.push(record);
-  saveData();
+  await saveData();
 
   notifyRecordCreated(record);
 
@@ -170,7 +170,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
   if (serialNumber !== undefined) r.serialNumber = serialNumber;
   if (remark !== undefined) r.remark = remark;
   r.updatedAt = new Date().toISOString();
-  saveData();
+  await saveData();
   res.json({ success: true, record: filterRecord(r, req.user.role) });
 });
 
@@ -179,7 +179,7 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'hr', 'manager'), (re
   const idx = data.records.findIndex(x => x.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: '记录不存在' });
   data.records.splice(idx, 1);
-  saveData();
+  await saveData();
   res.json({ success: true });
 });
 
@@ -227,7 +227,7 @@ router.post('/feedback-form/:token', upload.single('attachment'), (req, res) => 
   };
   r.status = 'feedback_done';
   r.updatedAt = new Date().toISOString();
-  saveData();
+  await saveData();
 
   notifyFeedbackSubmitted(r);
 
@@ -259,7 +259,7 @@ router.post('/:id/feedback', authMiddleware, requireRole('hr'), upload.single('a
   };
   r.status = 'feedback_done';
   r.updatedAt = new Date().toISOString();
-  saveData();
+  await saveData();
 
   notifyFeedbackSubmitted(r);
 
@@ -280,7 +280,7 @@ router.post('/:id/settlement', authMiddleware, requireRole('hr'), (req, res) => 
   };
   r.status = 'settled';
   r.updatedAt = new Date().toISOString();
-  saveData();
+  await saveData();
   res.json({ success: true, record: filterRecord(r, req.user.role) });
 });
 
@@ -300,7 +300,7 @@ router.post('/:id/onboarding', authMiddleware, requireRole('hr'), (req, res) => 
   };
   r.status = 'onboarded';
   r.updatedAt = new Date().toISOString();
-  saveData();
+  await saveData();
 
   // 通知 @massie 和 @Zoe 办理入职
   notifyOnboarding(r);
