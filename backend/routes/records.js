@@ -162,8 +162,14 @@ router.put('/:id', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
   if (startDate !== undefined) r.startDate = startDate;
   if (practiceDays !== undefined) {
     r.practiceDays = parseInt(practiceDays);
+  }
+  // 日期或天数变化时，重新计算结束日期并更新状态
+  if (startDate !== undefined || practiceDays !== undefined) {
     r.endDate = addDays(r.startDate, r.practiceDays);
-    if (r.status === 'practicing' && r.endDate <= todayStr()) r.status = 'feedback_pending';
+    // 只在未反馈前自动更新状态（已有反馈的不动）
+    if (r.status === 'practicing' || r.status === 'feedback_pending') {
+      r.status = r.endDate <= todayStr() ? 'feedback_pending' : 'practicing';
+    }
   }
   if (deviceModel !== undefined) r.deviceModel = deviceModel;
   if (accessories !== undefined) r.accessories = accessories;
