@@ -37,7 +37,7 @@ function getDefaultData() {
       {
         id: 'A2',
         username: 'hr',
-        password: hashPassword('hr666'),
+        password: hashPassword('hraaa'),
         name: '人事专员',
         wecom: '',
         role: 'hr',
@@ -47,7 +47,7 @@ function getDefaultData() {
       {
         id: 'A3',
         username: 'manager',
-        password: hashPassword('mgr888'),
+        password: hashPassword('HRDaaa'),
         name: '管理层',
         wecom: '',
         role: 'manager',

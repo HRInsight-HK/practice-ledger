@@ -89,8 +89,8 @@ function createSOP() {
       [
         [{text:'需求方',bold:true}, '组长 / 管理层', '-', '-', '发起实操需求，填写问卷表单，须提前>=3天'],
         [{text:'行政',bold:true}, '莫青霖', 'admin', 'admin123', '处理问卷、登记人员信息、录入设备、跟踪状态'],
-        [{text:'SSC',bold:true}, 'Zoe', 'hr', 'hr666', '录入薪资（本地不上云）、跟进反馈、办理入职/结算、账号管理'],
-        [{text:'HRD',bold:true}, 'massie', 'manager', 'mgr888', '审批正式入职、查看全量数据、关注风险预警、账号管理'],
+        [{text:'SSC',bold:true}, 'Zoe', 'hr', 'hraaa', '录入薪资（本地不上云）、跟进反馈、办理入职/结算、账号管理'],
+        [{text:'HRD',bold:true}, 'massie', 'manager', 'HRDaaa', '审批正式入职、查看全量数据、关注风险预警、账号管理'],
       ], [12, 15, 12, 12, 49]),
     emptyLine(),
 
@@ -251,8 +251,8 @@ function createLeadershipGuide() {
     makeTable(['角色', '用户名', '密码', '人员'],
       [
         ['行政', 'admin', 'admin123', '莫青霖'],
-        ['SSC', 'hr', 'hr666', 'Zoe'],
-        ['HRD', 'manager', 'mgr888', 'massie'],
+        ['SSC', 'hr', 'hraaa', 'Zoe'],
+        ['HRD', 'manager', 'HRDaaa', 'massie'],
       ], [25, 25, 25, 25]),
     emptyLine(),
     tipBox('系统已部署上线：' + CLOUD_URL),
@@ -428,7 +428,7 @@ function createSSCSOP() {
         ['问卷表单', Q_URL, '转发给需求方'],
       ], [20, 50, 30]),
     emptyLine(),
-    p('云端登录账号：hr  密码：hr666'),
+    p('云端登录账号：hr  密码：hraaa'),
     p('本地工具：用浏览器打开 hr-local.html，输入云端地址：' + CLOUD_URL),
     emptyLine(),
 
@@ -454,7 +454,7 @@ function createSSCSOP() {
     h3('步骤4：登录'),
     p('输入以下信息：'),
     bullet('用户名：hr'),
-    bullet('密码：hr666'),
+    bullet('密码：hraaa'),
     bullet('本地加密口令：自行设置一个密码（如 zoe2026），用于保护本地薪资数据'),
     p('点击"登录"进入主界面。'),
     emptyLine(),
@@ -557,8 +557,8 @@ function createFullGuide() {
       [
         [{text:'需求方',bold:true}, '组长 / 管理层', '-', '-', '发起实操需求，填写问卷表单，须提前>=3天'],
         [{text:'行政',bold:true}, '莫青霖', 'admin', 'admin123', '处理问卷、登记人员信息、录入设备、跟踪状态'],
-        [{text:'SSC',bold:true}, 'Zoe', 'hr', 'hr666', '录入薪资（本地不上云）、跟进反馈、办理入职/结算、账号管理'],
-        [{text:'HRD',bold:true}, 'massie', 'manager', 'mgr888', '审批正式入职、查看全量数据、关注风险预警、账号管理'],
+        [{text:'SSC',bold:true}, 'Zoe', 'hr', 'hraaa', '录入薪资（本地不上云）、跟进反馈、办理入职/结算、账号管理'],
+        [{text:'HRD',bold:true}, 'massie', 'manager', 'HRDaaa', '审批正式入职、查看全量数据、关注风险预警、账号管理'],
       ], [12, 15, 12, 12, 49]),
     emptyLine(),
 
@@ -611,7 +611,7 @@ function createFullGuide() {
     bullet('步骤2：执行 python -m http.server 8080 启动本地服务器'),
     bullet('步骤3：浏览器访问 http://localhost:8080/hr-local.html'),
     bullet('步骤4：输入云端地址 ' + CLOUD_URL + '，点击"连接"'),
-    bullet('步骤5：登录（用户名 hr，密码 hr666），设置本地加密口令'),
+    bullet('步骤5：登录（用户名 hr，密码 hraaa），设置本地加密口令'),
     bullet('步骤6：点击右上角"🔄 同步云端数据"按钮拉取人员列表'),
     bullet('步骤7：找到目标人员，点击"登记薪资"，填写薪资结构、基本工资、补贴等'),
     bullet('步骤8：定期点击"导出数据"备份薪资数据'),
@@ -663,8 +663,8 @@ function createFullGuide() {
     makeTable(['角色', '人员', '用户名', '密码'],
       [
         ['行政', '莫青霖', 'admin', 'admin123'],
-        ['SSC', 'Zoe', 'hr', 'hr666'],
-        ['HRD', 'massie', 'manager', 'mgr888'],
+        ['SSC', 'Zoe', 'hr', 'hraaa'],
+        ['HRD', 'massie', 'manager', 'HRDaaa'],
       ], [20, 25, 25, 30]),
     emptyLine(),
     tipBox('系统已部署上线：' + CLOUD_URL + ' 。问卷表单地址：' + Q_URL + ' 。'),

@@ -127,9 +127,10 @@ app.listen(PORT, () => {
   console.log('  地址: http://localhost:' + PORT);
   console.log('  问卷表单: http://localhost:' + PORT + '/questionnaire');
   console.log('  账号:');
-  console.log('    行政: admin / admin123 (莫青霖)');
-  console.log('    SSC:  hr / hr666 (Zoe)');
-  console.log('    HRD:  manager / mgr888 (massie)');
+  console.log('    行政: admin (莫青霖)');
+  console.log('    SSC:  hr (Zoe)');
+  console.log('    HRD:  manager (massie)');
+  console.log('    初始密码: 首次部署后请通过管理员账号修改');
   console.log('  企微机器人: ' + (diag.webhookConfigured ? '已配置' : '未配置(设置 WECOM_BOT_WEBHOOK 环境变量)'));
   console.log('  SSC UserID: ' + diag.hrUserId);
   console.log('  HRD UserID: ' + diag.managerUserId);
