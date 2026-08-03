@@ -92,6 +92,10 @@ async function loadData() {
       const coll = db.collection(COLL_NAME);
       const doc = await coll.findOne({ _id: 'main' });
       if (!doc) {
+        // 文档不存在：可能是首次启动，也可能是被外部清空
+        // 安全策略：插入空种子数据但不覆盖MongoDB现有数据
+        // 如果之前有数据被外部清空，需要从备份恢复
+        console.warn('[DB] MongoDB: 文档不存在，初始化为种子数据');
         data = getDefaultData();
         await coll.insertOne({ _id: 'main', data });
         console.log('[DB] MongoDB: 初始化种子数据 records=0');
