@@ -84,7 +84,7 @@ app.get('/api/diagnostic', (req, res) => {
     records: recordSummaries,
     serverTime: new Date().toISOString(),
     note: '如果 UserID 显示 (empty)，说明环境变量未设置，@功能将不生效',
-    buildVersion: 'fix-async-0808'
+    buildVersion: 'supabase-0808'
   });
 });
 
@@ -127,7 +127,7 @@ loadData().then(() => {
     console.log('  实操台账管理系统已启动');
     console.log('  地址: http://localhost:' + PORT);
     console.log('  问卷表单: http://localhost:' + PORT + '/questionnaire');
-    console.log('  数据存储: ' + (process.env.MONGODB_URI ? 'MongoDB Atlas (持久化)' : '文件存储 (临时)'));
+    console.log('  数据存储: ' + (process.env.DATABASE_URL ? 'PostgreSQL/Supabase (持久化)' : (process.env.MONGODB_URI ? 'MongoDB Atlas (持久化)' : '文件存储 (临时)')));
     console.log('  账号:');
   console.log('    行政: admin (莫青霖)');
   console.log('    SSC:  hr (Zoe)');
