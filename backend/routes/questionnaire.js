@@ -12,7 +12,7 @@ const ROLE_LABELS = {
 };
 
 // ==================== 公开提交问卷（免登录） ====================
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const {
     submitterName, submitterRole, personName, mentorName,
     dept1, dept2, businessArea, expectStart, expectDays, deviceNeed, remark
@@ -65,7 +65,7 @@ router.get('/', authMiddleware, (req, res) => {
 });
 
 // ==================== 一键导入为台账记录 ====================
-router.post('/:id/import', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
+router.post('/:id/import', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
   const data = getData();
   const q = (data.questionnaires || []).find(x => x.id === req.params.id);
   if (!q) return res.status(404).json({ error: '问卷不存在' });
@@ -143,7 +143,7 @@ router.post('/:id/import', authMiddleware, requireRole('admin', 'hr'), (req, res
 });
 
 // ==================== 忽略/删除问卷 ====================
-router.delete('/:id', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
+router.delete('/:id', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
   const data = getData();
   if (!data.questionnaires) return res.status(404).json({ error: '无问卷数据' });
   const idx = data.questionnaires.findIndex(x => x.id === req.params.id);

@@ -5,7 +5,7 @@ const { generateToken, authMiddleware, requireRole } = require('../lib/auth');
 const router = express.Router();
 
 // ==================== 登录 ====================
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { username, password, deviceModel, accessories, serialNumber } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: '请输入账号和密码' });
@@ -68,7 +68,7 @@ router.get('/accounts', authMiddleware, requireRole('hr', 'manager'), (req, res)
   res.json({ accounts });
 });
 
-router.post('/accounts', authMiddleware, requireRole('hr', 'manager'), (req, res) => {
+router.post('/accounts', authMiddleware, requireRole('hr', 'manager'), async (req, res) => {
   const { username, password, name, wecom, role } = req.body;
   if (!username || !password || !name) {
     return res.status(400).json({ error: '用户名、密码、姓名必填' });
@@ -102,7 +102,7 @@ router.post('/accounts', authMiddleware, requireRole('hr', 'manager'), (req, res
   res.json({ success: true, account: { ...acc, password: undefined } });
 });
 
-router.put('/accounts/:id', authMiddleware, requireRole('manager'), (req, res) => {
+router.put('/accounts/:id', authMiddleware, requireRole('manager'), async (req, res) => {
   const { name, wecom, role, active, password } = req.body;
   const data = getData();
   const acc = data.accounts.find(a => a.id === req.params.id);
@@ -117,7 +117,7 @@ router.put('/accounts/:id', authMiddleware, requireRole('manager'), (req, res) =
   res.json({ success: true });
 });
 
-router.delete('/accounts/:id', authMiddleware, requireRole('manager'), (req, res) => {
+router.delete('/accounts/:id', authMiddleware, requireRole('manager'), async (req, res) => {
   const data = getData();
   const idx = data.accounts.findIndex(a => a.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: '账号不存在' });

@@ -1,10 +1,25 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const dns = require('dns');
 
 const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME = 'practice_ledger';
 const COLL_NAME = 'appdata';
+
+// 修复本地网络DNS不支持SRV解析的问题
+// Render等云平台的DNS正常，此设置不影响
+try {
+  const testResolve = dns.resolveSrv;
+  if (testResolve) {
+    // 设置Google DNS作为备用，防止本地DNS(如VPN)不支持SRV记录
+    const origServers = dns.getServers();
+    // 添加公共DNS到列表末尾作为fallback
+    dns.setServers([...new Set([...origServers, '8.8.8.8', '1.1.1.1'])]);
+  }
+} catch (e) {
+  // 忽略DNS设置错误
+}
 
 // ==================== Password Utils ====================
 function hashPassword(pwd) {

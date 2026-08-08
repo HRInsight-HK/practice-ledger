@@ -101,7 +101,7 @@ router.get('/', authMiddleware, (req, res) => {
   res.json({ records: filtered });
 });
 
-router.post('/', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
+router.post('/', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
   const { name, mentor, dept1, dept2, startDate, practiceDays, deviceModel, accessories, serialNumber, remark } = req.body;
   if (!name) return res.status(400).json({ error: '请填写实操人员姓名' });
   if (!mentor) return res.status(400).json({ error: '请填写带教人' });
@@ -149,7 +149,7 @@ router.post('/', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
   res.json({ success: true, record: filterRecord(record, req.user.role), warning });
 });
 
-router.put('/:id', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
+router.put('/:id', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
   const data = getData();
   const r = data.records.find(x => x.id === req.params.id);
   if (!r) return res.status(404).json({ error: '记录不存在' });
@@ -180,7 +180,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
   res.json({ success: true, record: filterRecord(r, req.user.role) });
 });
 
-router.delete('/:id', authMiddleware, requireRole('admin', 'hr', 'manager'), (req, res) => {
+router.delete('/:id', authMiddleware, requireRole('admin', 'hr', 'manager'), async (req, res) => {
   const data = getData();
   const idx = data.records.findIndex(x => x.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: '记录不存在' });
@@ -208,7 +208,7 @@ router.get('/feedback-form/:token', (req, res) => {
 });
 
 // 公开反馈提交 - 支持附件上传
-router.post('/feedback-form/:token', upload.single('attachment'), (req, res) => {
+router.post('/feedback-form/:token', upload.single('attachment'), async (req, res) => {
   const { result, note, attendanceDays, lateCount, earlyLeaveCount } = req.body;
   if (!result || !['pass', 'fail'].includes(result)) {
     return res.status(400).json({ error: '请选择反馈结果' });
@@ -241,7 +241,7 @@ router.post('/feedback-form/:token', upload.single('attachment'), (req, res) => 
 });
 
 // ==================== HR代录反馈 - 支持附件上传 ====================
-router.post('/:id/feedback', authMiddleware, requireRole('hr'), upload.single('attachment'), (req, res) => {
+router.post('/:id/feedback', authMiddleware, requireRole('hr'), upload.single('attachment'), async (req, res) => {
   const { result, note, attendanceDays, lateCount, earlyLeaveCount } = req.body;
   if (!result || !['pass', 'fail'].includes(result)) {
     return res.status(400).json({ error: '请选择反馈结果' });
@@ -273,7 +273,7 @@ router.post('/:id/feedback', authMiddleware, requireRole('hr'), upload.single('a
 });
 
 // ==================== 办理结算（HR）- 不存金额，金额在本地 ====================
-router.post('/:id/settlement', authMiddleware, requireRole('hr'), (req, res) => {
+router.post('/:id/settlement', authMiddleware, requireRole('hr'), async (req, res) => {
   const { date, note } = req.body;
   const data = getData();
   const r = data.records.find(x => x.id === req.params.id);
@@ -291,7 +291,7 @@ router.post('/:id/settlement', authMiddleware, requireRole('hr'), (req, res) => 
 });
 
 // ==================== 办理入职（HR）- 通知@massie和@Zoe ====================
-router.post('/:id/onboarding', authMiddleware, requireRole('hr'), (req, res) => {
+router.post('/:id/onboarding', authMiddleware, requireRole('hr'), async (req, res) => {
   const { date, note } = req.body;
   const data = getData();
   const r = data.records.find(x => x.id === req.params.id);

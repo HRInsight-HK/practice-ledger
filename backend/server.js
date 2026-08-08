@@ -84,7 +84,7 @@ app.get('/api/diagnostic', (req, res) => {
     records: recordSummaries,
     serverTime: new Date().toISOString(),
     note: '如果 UserID 显示 (empty)，说明环境变量未设置，@功能将不生效',
-    buildVersion: 'a507741'
+    buildVersion: 'fix-async-0808'
   });
 });
 
