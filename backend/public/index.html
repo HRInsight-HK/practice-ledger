@@ -380,26 +380,67 @@ tr:hover { background: var(--gray-bg); }
           <div id="f_days_warn" style="display:none;color:#dc2626;font-size:12px;margin-top:4px;line-height:1.5;">⚠️ 实操天数超过7天，存在用工风险！建议控制在7天以内。超过7天可能产生事实劳动关系，引发劳动仲裁。</div>
         </div>
         <div class="form-group">
-          <label class="form-label">设备型号</label>
-          <input type="text" class="form-input" id="f_deviceModel" placeholder="如：ThinkPad T14">
+          <label class="form-label">联系电话</label>
+          <input type="text" class="form-input" id="f_phone" placeholder="实操人员手机号">
         </div>
         <div class="form-group">
-          <label class="form-label">序列号</label>
-          <input type="text" class="form-input" id="f_serialNumber" placeholder="设备序列号">
+          <label class="form-label">企业微信</label>
+          <input type="text" class="form-input" id="f_wecom" placeholder="实操人员企微号">
         </div>
-        <div class="form-group full">
-          <label class="form-label">配件情况</label>
-          <input type="text" class="form-input" id="f_accessories" placeholder="如：扩展坞、外接显示器、键盘鼠标">
+        <div class="form-group">
+          <label class="form-label">私人微信</label>
+          <input type="text" class="form-input" id="f_wechat" placeholder="实操人员个人微信号">
         </div>
         <div class="form-group full">
           <label class="form-label">备注</label>
           <input type="text" class="form-input" id="f_remark" placeholder="可选">
         </div>
       </div>
+      <div style="margin-top:16px;">
+        <label class="form-label" style="margin-bottom:8px;">设备与账号登记 <span class="hint">（每行一台设备/一组账号，可留空）</span></label>
+        <div style="overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius-sm);">
+          <table style="width:100%; border-collapse:collapse; font-size:12px; min-width:860px;">
+            <thead>
+              <tr style="background:var(--gray-bg);">
+                <th style="padding:8px 6px; text-align:left; border-bottom:1px solid var(--border);">花名</th>
+                <th style="padding:8px 6px; text-align:left; border-bottom:1px solid var(--border);">设备型号</th>
+                <th style="padding:8px 6px; text-align:left; border-bottom:1px solid var(--border);">品牌</th>
+                <th style="padding:8px 6px; text-align:left; border-bottom:1px solid var(--border);">序列号</th>
+                <th style="padding:8px 6px; text-align:left; border-bottom:1px solid var(--border);">企业微信账号</th>
+                <th style="padding:8px 6px; text-align:left; border-bottom:1px solid var(--border);">私人微信账号</th>
+                <th style="padding:8px 6px; text-align:left; border-bottom:1px solid var(--border);">其他账号</th>
+                <th style="padding:8px 6px; border-bottom:1px solid var(--border); width:40px;"></th>
+              </tr>
+            </thead>
+            <tbody id="deviceRowsBody"></tbody>
+          </table>
+        </div>
+        <button type="button" class="btn btn-default" style="margin-top:8px; font-size:12px;" onclick="addDeviceRow()">+ 添加设备行</button>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-default" onclick="closeModal('registerModal')">取消</button>
       <button class="btn btn-primary" onclick="saveRecord()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Resume Modal ==================== -->
+<div class="modal-overlay" id="resumeModal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">人员简历</div>
+      <button class="modal-close" onclick="closeModal('resumeModal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div id="resumePersonInfo" style="background:var(--gray-bg); padding:12px 16px; border-radius:var(--radius-sm); margin-bottom:16px; font-size:13px; color:var(--text-secondary);"></div>
+      <div id="resumeCurrent" style="margin-bottom:16px;"></div>
+      <label class="form-label">选择简历文件 <span class="hint">（PDF / Word / 图片，≤2MB）</span></label>
+      <input type="file" id="resumeFile" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="margin-top:6px; font-size:13px;">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('resumeModal')">取消</button>
+      <button class="btn btn-primary" onclick="submitResume()">上传简历</button>
     </div>
   </div>
 </div>
@@ -962,7 +1003,12 @@ function renderTable() {
       salaryCell = '<span style="font-size:11px;color:var(--text-tertiary);">请用本地工具</span>';
     }
 
-    const deviceCell = r.deviceModel ? `${r.deviceModel}${r.serialNumber ? '<br><span class="days-text">' + r.serialNumber + '</span>' : ''}` : '—';
+    let deviceCell = '—';
+    if (r.devices && r.devices.length) {
+      deviceCell = r.devices.map(d => (d.alias ? d.alias + '：' : '') + (d.deviceModel || '') + (d.brand ? ' ' + d.brand : '')).filter(x => x.trim()).join('<br>') || (r.devices.length + '台设备');
+    } else if (r.deviceModel) {
+      deviceCell = `${r.deviceModel}${r.serialNumber ? '<br><span class="days-text">' + r.serialNumber + '</span>' : ''}`;
+    }
 
     let actions = '<div class="action-group" style="justify-content:flex-end;">';
     actions += `<button class="btn-text btn-sm" onclick="openDetail('${r.id}')">详情</button>`;
@@ -980,6 +1026,7 @@ function renderTable() {
           actions += `<button class="btn-text btn-sm" onclick="openSettlement('${r.id}','settle')">办理结算</button>`;
         }
       }
+      actions += `<button class="btn-text btn-sm" onclick="openResumeModal('${r.id}')">📎${r.hasResume ? '简历' : '传简历'}</button>`;
     }
     // 反馈链接：所有角色可复制，发给带教人填写
     if ((r.status === 'practicing' || r.status === 'feedback_pending') && r.feedbackToken) {
@@ -1005,6 +1052,39 @@ function renderTable() {
 }
 
 // ==================== Register ====================
+const DEVICE_COLS = ['alias','deviceModel','brand','serialNumber','wecomAccount','personalWechat','otherAccounts'];
+
+function deviceRowHtml(d) {
+  d = d || {};
+  const inputs = DEVICE_COLS.map(col =>
+    `<td style="padding:4px 4px; border-bottom:1px solid var(--border);"><input type="text" class="dev-input" data-col="${col}" value="${(d[col]||'').toString().replace(/"/g,'&quot;')}" style="width:100%; box-sizing:border-box; border:1px solid var(--border); border-radius:4px; padding:5px 6px; font-size:12px;"></td>`
+  ).join('');
+  return '<tr>' + inputs + '<td style="border-bottom:1px solid var(--border); text-align:center;"><button type="button" onclick="removeDeviceRow(this)" style="border:none; background:none; color:var(--red); cursor:pointer; font-size:14px; padding:4px;">✕</button></td></tr>';
+}
+
+function addDeviceRow(d) {
+  document.getElementById('deviceRowsBody').insertAdjacentHTML('beforeend', deviceRowHtml(d));
+}
+
+function removeDeviceRow(btn) {
+  btn.closest('tr').remove();
+}
+
+function renderDeviceRows(devices) {
+  const body = document.getElementById('deviceRowsBody');
+  body.innerHTML = '';
+  const list = (devices && devices.length) ? devices : [{}];
+  list.forEach(d => addDeviceRow(d));
+}
+
+function collectDevices() {
+  return Array.from(document.querySelectorAll('#deviceRowsBody tr')).map(tr => {
+    const d = {};
+    tr.querySelectorAll('.dev-input').forEach(inp => { d[inp.dataset.col] = inp.value.trim(); });
+    return d;
+  }).filter(d => DEVICE_COLS.some(c => d[c]));
+}
+
 function openRegisterModal(id) {
   editingId = id || null;
   const title = document.getElementById('registerTitle');
@@ -1018,14 +1098,21 @@ function openRegisterModal(id) {
     document.getElementById('f_dept2').value = r.dept2 || '';
     document.getElementById('f_startDate').value = r.startDate || '';
     document.getElementById('f_days').value = r.practiceDays || '';
-    document.getElementById('f_deviceModel').value = r.deviceModel || '';
-    document.getElementById('f_serialNumber').value = r.serialNumber || '';
-    document.getElementById('f_accessories').value = r.accessories || '';
+    document.getElementById('f_phone').value = (r.contact && r.contact.phone) || '';
+    document.getElementById('f_wecom').value = (r.contact && r.contact.wecom) || '';
+    document.getElementById('f_wechat').value = (r.contact && r.contact.wechat) || '';
     document.getElementById('f_remark').value = r.remark || '';
+    // 兼容旧数据：无devices但有旧设备字段时，转为第一行
+    let devices = r.devices || [];
+    if (!devices.length && (r.deviceModel || r.serialNumber)) {
+      devices = [{ alias: '', deviceModel: r.deviceModel || '', brand: '', serialNumber: r.serialNumber || '', wecomAccount: '', personalWechat: '', otherAccounts: r.accessories || '' }];
+    }
+    renderDeviceRows(devices);
   } else {
     title.textContent = '登记实操人员';
-    ['f_name','f_mentor','f_dept1','f_dept2','f_days','f_deviceModel','f_serialNumber','f_accessories','f_remark'].forEach(id => document.getElementById(id).value = '');
+    ['f_name','f_mentor','f_dept1','f_dept2','f_days','f_phone','f_wecom','f_wechat','f_remark'].forEach(fid => document.getElementById(fid).value = '');
     document.getElementById('f_startDate').value = todayStr();
+    renderDeviceRows([]);
   }
   showModal('registerModal');
 }
@@ -1038,9 +1125,12 @@ async function saveRecord() {
     dept2: document.getElementById('f_dept2').value.trim(),
     startDate: document.getElementById('f_startDate').value,
     practiceDays: parseInt(document.getElementById('f_days').value),
-    deviceModel: document.getElementById('f_deviceModel').value.trim(),
-    serialNumber: document.getElementById('f_serialNumber').value.trim(),
-    accessories: document.getElementById('f_accessories').value.trim(),
+    contact: {
+      phone: document.getElementById('f_phone').value.trim(),
+      wecom: document.getElementById('f_wecom').value.trim(),
+      wechat: document.getElementById('f_wechat').value.trim()
+    },
+    devices: collectDevices(),
     remark: document.getElementById('f_remark').value.trim(),
   };
   if (!body.name) return showToast('请填写实操人员姓名', 'error');
@@ -1070,6 +1160,81 @@ async function saveRecord() {
 
 function openSalaryModal(id) {
   showToast('薪资管理已迁移至本地SSC工具，请使用本地工具登记薪资', 'error');
+}
+
+// ==================== Resume ====================
+let resumeRecordId = null;
+
+function openResumeModal(id) {
+  resumeRecordId = id;
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('resumePersonInfo').textContent = r.name + '（' + r.dept1 + (r.dept2 ? '·' + r.dept2 : '') + ' / 带教：' + r.mentor + '）';
+  const cur = document.getElementById('resumeCurrent');
+  if (r.hasResume) {
+    cur.innerHTML = '<div style="font-size:13px;">已上传：<a href="javascript:void(0)" onclick="downloadResume(\'' + r.id + '\', \'' + encodeURIComponent(r.resumeOriginalName || '简历') + '\')" style="color:var(--primary); text-decoration:underline;">📄 ' + (r.resumeOriginalName || '简历') + '</a>　<button class="btn-text btn-sm btn-danger-text" onclick="deleteResume(\'' + r.id + '\')">删除</button></div><div class="days-text" style="margin-top:4px;">重新选择文件并上传可替换现有简历</div>';
+  } else {
+    cur.innerHTML = '<div class="days-text">尚未上传简历</div>';
+  }
+  document.getElementById('resumeFile').value = '';
+  showModal('resumeModal');
+}
+
+async function submitResume() {
+  const fileInput = document.getElementById('resumeFile');
+  if (!fileInput.files || !fileInput.files[0]) return showToast('请先选择简历文件', 'error');
+  if (fileInput.files[0].size > 2 * 1024 * 1024) return showToast('文件超过2MB限制，请压缩后上传', 'error');
+
+  const fd = new FormData();
+  fd.append('resume', fileInput.files[0]);
+  try {
+    const resp = await fetch('/api/records/' + resumeRecordId + '/resume', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: fd
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || '上传失败');
+    showToast('简历上传成功', 'success');
+    closeModal('resumeModal');
+    await loadRecords();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function downloadResume(id, encodedName) {
+  try {
+    const resp = await fetch('/api/records/' + id + '/resume', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      throw new Error(data.error || '下载失败');
+    }
+    const blob = await resp.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = decodeURIComponent(encodedName || '简历');
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function deleteResume(id) {
+  if (!confirm('确认删除该简历？')) return;
+  try {
+    await api('DELETE', '/records/' + id + '/resume');
+    showToast('简历已删除', 'success');
+    closeModal('resumeModal');
+    await loadRecords();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
 }
 
 // ==================== Feedback ====================
@@ -1190,6 +1355,37 @@ function openDetail(id) {
   ).join('') + '</div>';
 
   // Basic info
+  const contact = r.contact || {};
+  const hasContact = contact.phone || contact.wecom || contact.wechat;
+  let contactHtml = '';
+  if (hasContact) {
+    contactHtml =
+      '<div class="detail-item"><span class="detail-label">联系电话</span><span class="detail-value">' + (contact.phone || '—') + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">企业微信</span><span class="detail-value">' + (contact.wecom || '—') + '</span></div>' +
+      '<div class="detail-item"><span class="detail-label">私人微信</span><span class="detail-value">' + (contact.wechat || '—') + '</span></div>';
+  }
+
+  // 设备与账号表格
+  let deviceHtml = '';
+  const devList = (r.devices && r.devices.length) ? r.devices : ((r.deviceModel || r.serialNumber) ? [{ alias: '', deviceModel: r.deviceModel || '', brand: '', serialNumber: r.serialNumber || '', wecomAccount: '', personalWechat: '', otherAccounts: r.accessories || '' }] : []);
+  if (devList.length) {
+    deviceHtml = '<div class="detail-section"><div class="detail-section-title">设备与账号</div><div style="overflow-x:auto;">' +
+      '<table style="width:100%; border-collapse:collapse; font-size:12px; min-width:700px;">' +
+      '<thead><tr style="background:var(--gray-bg);">' +
+      ['花名','设备型号','品牌','序列号','企微账号','私人微信','其他账号'].map(h => '<th style="padding:6px 8px; text-align:left; border:1px solid var(--border);">' + h + '</th>').join('') +
+      '</tr></thead><tbody>' +
+      devList.map(d => '<tr>' +
+        [d.alias, d.deviceModel, d.brand, d.serialNumber, d.wecomAccount, d.personalWechat, d.otherAccounts].map(v => '<td style="padding:6px 8px; border:1px solid var(--border);">' + (v || '—') + '</td>').join('') +
+        '</tr>').join('') +
+      '</tbody></table></div></div>';
+  }
+
+  // 简历
+  let resumeHtml = '';
+  if (r.hasResume) {
+    resumeHtml = '<div class="detail-section"><div class="detail-section-title">人员简历（SSC上传）</div><div class="detail-item full"><span class="detail-label">简历文件</span><span class="detail-value"><a href="javascript:void(0)" onclick="downloadResume(\'' + r.id + '\', \'' + encodeURIComponent(r.resumeOriginalName || '简历') + '\')" style="color:var(--primary); text-decoration:underline;">📄 ' + (r.resumeOriginalName || '简历') + '</a></span></div></div>';
+  }
+
   let html = '<div class="detail-section"><div class="detail-section-title">基本信息</div><div class="detail-grid">' +
     '<div class="detail-item"><span class="detail-label">实操人员</span><span class="detail-value">' + r.name + '</span></div>' +
     '<div class="detail-item"><span class="detail-label">带教人</span><span class="detail-value">' + r.mentor + '</span></div>' +
@@ -1199,11 +1395,9 @@ function openDetail(id) {
     '<div class="detail-item"><span class="detail-label">实操结束日期</span><span class="detail-value">' + r.endDate + '</span></div>' +
     '<div class="detail-item"><span class="detail-label">实操天数</span><span class="detail-value">' + r.practiceDays + ' 天</span></div>' +
     '<div class="detail-item"><span class="detail-label">当前状态</span><span class="detail-value"><span class="badge ' + cfg.badge + '">' + cfg.label + '</span></span></div>' +
-    '<div class="detail-item"><span class="detail-label">设备型号</span><span class="detail-value">' + (r.deviceModel || '—') + '</span></div>' +
-    '<div class="detail-item"><span class="detail-label">序列号</span><span class="detail-value">' + (r.serialNumber || '—') + '</span></div>' +
-    '<div class="detail-item full"><span class="detail-label">配件情况</span><span class="detail-value">' + (r.accessories || '—') + '</span></div>' +
+    contactHtml +
     (r.remark ? '<div class="detail-item full"><span class="detail-label">备注</span><span class="detail-value" style="font-weight:400;">' + r.remark + '</span></div>' : '') +
-    '</div></div>';
+    '</div></div>' + deviceHtml + resumeHtml;
 
   // Salary (HR/Manager only)
   if (seeSalary) {
@@ -1270,6 +1464,9 @@ function openDetail(id) {
   }
   if (canEdit()) {
     footer += '<button class="btn btn-default" onclick="closeModal(\'detailModal\');openRegisterModal(\'' + r.id + '\')">编辑</button>';
+  }
+  if (isHR()) {
+    footer += '<button class="btn btn-default" onclick="openResumeModal(\'' + r.id + '\')">📎 ' + (r.hasResume ? '查看/替换简历' : '上传简历') + '</button>';
   }
   if (isHR()) {
     if (r.status === 'practicing' || r.status === 'feedback_pending') {
