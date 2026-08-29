@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>晚餐报销 · SSC 台账后台</title>
+<style>
+  :root{ --ink:#1f2937; --sub:#6b7280; --line:#e5e7eb; --bg:#f7f8fa; --card:#fff;
+    --blue:#2563eb; --blue-bg:#eff6ff; --green:#059669; --green-bg:#ecfdf5;
+    --red:#dc2626; --red-bg:#fef2f2; --amber:#d97706; --amber-bg:#fffbeb; --r:10px; }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--ink); font-size:14px; line-height:1.6;}
+  .wrap{max-width:1100px; margin:0 auto; padding:20px 14px 60px;}
+  header{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;}
+  header h1{font-size:18px;}
+  .tabs{display:flex; gap:6px; margin-bottom:14px;}
+  .tab{padding:6px 16px; border-radius:8px; cursor:pointer; border:1px solid var(--line); background:var(--card); font-size:13.5px;}
+  .tab.on{background:var(--blue); color:#fff; border-color:var(--blue); font-weight:600;}
+  .panel{display:none;} .panel.on{display:block;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:16px; margin-bottom:12px;}
+  .card h3{font-size:14.5px; margin-bottom:10px; padding-bottom:7px; border-bottom:1px solid var(--line);}
+  .toolbar{display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center;}
+  .toolbar input,.toolbar select{width:auto; padding:6px 10px; border:1px solid var(--line); border-radius:8px; font-size:13px;}
+  label{display:block; font-size:12px; color:var(--sub); margin-bottom:3px;}
+  input,select{padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px; width:100%; background:#fff;}
+  .btn{display:inline-block; padding:8px 18px; background:var(--blue); color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer; font-weight:600;}
+  .btn.ghost{background:#fff; color:var(--blue); border:1px solid var(--blue);}
+  .btn.warn{background:#fff; color:var(--red); border:1px solid var(--red);}
+  .btn.small{padding:5px 12px; font-size:12px; font-weight:500;}
+  table{width:100%; border-collapse:collapse; font-size:12.5px; background:#fff;}
+  th{background:#f9fafb; text-align:left; padding:7px 9px; font-size:11.5px; color:var(--sub); border-bottom:1px solid var(--line); white-space:nowrap;}
+  td{padding:7px 9px; border-bottom:1px solid #f1f2f4; white-space:nowrap;}
+  .pill{display:inline-block; padding:1px 9px; border-radius:20px; font-size:11.5px; font-weight:600;}
+  .pill.g{background:var(--green-bg); color:var(--green);}
+  .pill.r{background:var(--red-bg); color:var(--red);}
+  .pill.b{background:var(--blue-bg); color:var(--blue);}
+  .pill.a{background:var(--amber-bg); color:var(--amber);}
+  .money{font-variant-numeric:tabular-nums; font-weight:600;}
+  .money.cap{color:var(--amber);}
+  .summary{font-size:12.5px; color:var(--sub); margin-top:10px;}
+  .transfer{background:#f9fafb; border:1px solid var(--line); border-radius:var(--r); padding:12px; white-space:pre-wrap; font-size:12.5px; margin-top:10px; display:none;}
+  .transfer.show{display:block;}
+  .login{max-width:360px; margin:80px auto 0;}
+  .err{background:var(--red-bg); border:1px solid #fecaca; color:var(--red); border-radius:8px; padding:8px 12px; font-size:13px; margin-top:10px; display:none;}
+  .err.show{display:block;}
+  .scroll{overflow-x:auto;}
+  .del{color:var(--red); cursor:pointer; font-size:12px; text-decoration:underline; background:none; border:none;}
+  .empty{text-align:center; color:var(--sub); padding:24px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- 登录 -->
+  <div class="login card" id="view-login">
+    <h3>SSC 后台登录</h3>
+    <div style="margin-bottom:10px;"><label>账号</label><input id="l-user" placeholder="hr / admin"></div>
+    <div style="margin-bottom:12px;"><label>密码</label><input id="l-pass" type="password" placeholder=""></div>
+    <button class="btn" style="width:100%;" onclick="doLogin()">登录</button>
+    <div class="err" id="l-err"></div>
+    <div class="summary" style="margin-top:10px;">使用实操台账系统账号（SSC：hr / 行政：admin）</div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="view-main" style="display:none;">
+    <header>
+      <h1>🧾 晚餐报销 · 台账后台</h1>
+      <div><span id="who" style="font-size:13px; color:var(--sub); margin-right:10px;"></span><button class="btn small ghost" onclick="logout()">退出</button></div>
+    </header>
+
+    <div class="tabs">
+      <div class="tab on" data-t="ledger">审核台账</div>
+      <div class="tab" data-t="weekly">周结算汇总</div>
+    </div>
+
+    <div class="panel on" id="p-ledger">
+      <div class="card">
+        <h3>提交记录</h3>
+        <div class="toolbar">
+          <input id="flt-name" placeholder="按姓名筛选" oninput="renderLedger()">
+          <select id="flt-status" onchange="renderLedger()"><option value="">全部状态</option><option value="PASS">仅通过</option><option value="FAIL">仅不通过</option></select>
+          <span style="flex:1"></span>
+          <button class="btn small ghost" onclick="loadRecords()">↻ 刷新</button>
+          <button class="btn small ghost" onclick="exportCSV()">⬇ 导出 CSV</button>
+        </div>
+        <div class="scroll"><table id="tbl"><thead><tr>
+          <th>提交时间</th><th>姓名</th><th>一级部门</th><th>用餐日期</th><th>通道</th><th>下单</th><th>打卡</th><th>实付</th><th>判定</th><th>可报</th><th>原因 / 说明</th><th>支付宝</th><th></th>
+        </tr></thead><tbody></tbody></table></div>
+        <div class="summary" id="ledger-summary"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="p-weekly">
+      <div class="card">
+        <h3>周结算（每周五执行）</h3>
+        <div class="toolbar">
+          <label style="margin:0;">结算周：</label>
+          <select id="week-sel" onchange="renderWeekly()"></select>
+        </div>
+        <div class="scroll"><table id="tbl-weekly"><thead><tr>
+          <th>姓名</th><th>支付宝账号</th><th>实名</th><th>通过笔数</th><th>本周累计可报</th><th>应转金额（周封顶 100）</th>
+        </tr></thead><tbody></tbody></table></div>
+        <div class="summary" id="weekly-summary"></div>
+        <button class="btn small ghost" onclick="makeTransfer()">📋 生成转账清单</button>
+        <div class="transfer" id="transfer"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOKEN_KEY='dinner_admin_token', USER_KEY='dinner_admin_user';
+let records=[];
+const ST={PASS_A:['通过','g'],PASS_B:['通过','g'],PASS_CAPPED:['通过(周封顶)','a'],
+  FAIL_BLUR:['不通过','r'],FAIL_DATE:['不通过','r'],FAIL_DUP:['不通过','r'],FAIL_TIME:['不通过','r'],FAIL_WEEKCAP:['不通过','r']};
+
+function api(path,opts){ const h={'Content-Type':'application/json'};
+  const t=localStorage.getItem(TOKEN_KEY); if(t) h['Authorization']='Bearer '+t;
+  return fetch('/api/dinner'+path,{...opts,headers:{...h,...(opts&&opts.headers||{})}}).then(r=>r.json().then(j=>({ok:r.ok,j})));
+}
+
+function doLogin(){
+  const u=document.getElementById('l-user').value.trim(), p=document.getElementById('l-pass').value;
+  const err=document.getElementById('l-err'); err.className='err';
+  fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})})
+    .then(r=>r.json().then(j=>({ok:r.ok,j})))
+    .then(({ok,j})=>{
+      if(!ok){ err.textContent=j.error||'登录失败'; err.className='err show'; return; }
+      localStorage.setItem(TOKEN_KEY,j.token);
+      localStorage.setItem(USER_KEY,JSON.stringify(j.user||{}));
+      enterMain();
+    })
+    .catch(()=>{ err.textContent='网络错误'; err.className='err show'; });
+}
+function enterMain(){
+  document.getElementById('view-login').style.display='none';
+  document.getElementById('view-main').style.display='block';
+  const u=JSON.parse(localStorage.getItem(USER_KEY)||'{}');
+  document.getElementById('who').textContent=(u.name||'')+'（'+(u.username||'')+'）';
+  loadRecords();
+}
+function logout(){ localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); location.reload(); }
+
+document.getElementById('l-pass').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+if(localStorage.getItem(TOKEN_KEY)){
+  fetch('/api/auth/me',{headers:{'Authorization':'Bearer '+localStorage.getItem(TOKEN_KEY)}})
+    .then(r=>{ if(r.ok) enterMain(); }).catch(()=>{});
+}
+
+function loadRecords(){
+  api('/records').then(({ok,j})=>{
+    if(!ok){ if(j&&j.error&&j.error.includes('登录')){ localStorage.removeItem(TOKEN_KEY); location.reload(); } return; }
+    records=j.records||[]; renderLedger(); renderWeekly();
+  });
+}
+
+function mondayOf(dstr){ const d=new Date(dstr+'T00:00:00'); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); return d.toISOString().slice(0,10); }
+function weekLabel(m){ const a=new Date(m+'T00:00:00'),b=new Date(m+'T00:00:00'); b.setDate(b.getDate()+6);
+  return (a.getMonth()+1)+'月'+a.getDate()+'日 - '+(b.getMonth()+1)+'月'+b.getDate()+'日'; }
+function fmtM(n){ return (Math.round(n*10)/10).toFixed(1); }
+
+function renderLedger(){
+  const fn=document.getElementById('flt-name').value.trim(), fs=document.getElementById('flt-status').value;
+  const list=records.filter(r=>(!fn||r.name.includes(fn))&&(!fs||(fs==='PASS'?r.status.startsWith('PASS'):r.status.startsWith('FAIL'))));
+  document.querySelector('#tbl tbody').innerHTML=list.map(r=>{
+    const [txt,cls]=ST[r.status]||['—','b'];
+    return '<tr><td>'+r.createdAt.replace('T',' ').slice(0,16)+'</td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.dept1)+(r.dept2?' / '+esc(r.dept2):'')+'</td><td>'+r.date+'</td>'+
+      '<td><span class="pill b">'+r.channel+'</span></td><td>'+(r.ai&&r.ai.orderTime||'—')+'</td><td>'+(r.ai&&r.ai.punchTime||'—')+'</td>'+
+      '<td class="money">'+(r.ai&&r.ai.amount?fmtM(r.ai.amount):'—')+'</td>'+
+      '<td><span class="pill '+cls+'">'+txt+'</span></td>'+
+      '<td class="money '+(r.status==='PASS_CAPPED'?'cap':'')+'">'+(r.amount>0?fmtM(r.amount)+' 元':'—')+'</td>'+
+      '<td style="white-space:normal; max-width:260px;">'+esc(r.reason)+'</td>'+
+      '<td style="white-space:normal;">'+esc(r.ali)+'<br>'+esc(r.aliname)+'</td>'+
+      '<td><button class="del" onclick="delRec(\''+r.id+'\')">删除</button></td></tr>';
+  }).join('')||'<tr><td colspan="13" class="empty">暂无记录</td></tr>';
+  const passN=records.filter(r=>r.status.startsWith('PASS')).length;
+  document.getElementById('ledger-summary').textContent=records.length?('共 '+records.length+' 条提交，通过 '+passN+' 条，不通过 '+(records.length-passN)+' 条'):'';
+}
+
+function delRec(id){
+  if(!confirm('确认删除这条提交记录？删除后其周累计额度也会释放。')) return;
+  api('/records/'+id,{method:'DELETE'}).then(({ok,j})=>{ if(ok) loadRecords(); else alert(j.error||'删除失败'); });
+}
+
+function renderWeekly(){
+  const sel=document.getElementById('week-sel');
+  const weeks=[...new Set(records.map(r=>mondayOf(r.date)))].sort().reverse();
+  if(weeks.join()!==[...sel.options].map(o=>o.value).join()){
+    sel.innerHTML=weeks.map(w=>'<option value="'+w+'">'+weekLabel(w)+'</option>').join('');
+  }
+  const wk=sel.value||weeks[0]; if(!wk) return;
+  const passes=records.filter(r=>r.status.startsWith('PASS')&&mondayOf(r.date)===wk);
+  const byName={};
+  passes.forEach(r=>{
+    if(!byName[r.name]) byName[r.name]={name:r.name,ali:r.ali,aliname:r.aliname,n:0,sum:0};
+    byName[r.name].n++; byName[r.name].sum+=r.amount;
+  });
+  const rows=Object.values(byName);
+  document.querySelector('#tbl-weekly tbody').innerHTML=rows.map(x=>
+    '<tr><td><b>'+esc(x.name)+'</b></td><td>'+esc(x.ali)+'</td><td>'+esc(x.aliname)+'</td><td>'+x.n+'</td><td class="money">'+fmtM(x.sum)+' 元</td>'+
+    '<td class="money'+(x.sum>=100?' cap':'')+'">'+fmtM(Math.min(x.sum,100))+' 元</td></tr>'
+  ).join('')||'<tr><td colspan="6" class="empty">该周无通过记录</td></tr>';
+  const total=rows.reduce((s,x)=>s+Math.min(x.sum,100),0);
+  document.getElementById('weekly-summary').textContent=rows.length?('本周共 '+rows.length+' 人待转账，合计 '+fmtM(total)+' 元'):'';
+  return {wk,rows,total};
+}
+
+function makeTransfer(){
+  const {wk,rows,total}=renderWeekly()||{};
+  const box=document.getElementById('transfer');
+  if(!rows||!rows.length){ box.className='transfer show'; box.textContent='该周无通过记录，无需转账。'; return; }
+  const lines=rows.map(x=>x.name+'（'+x.aliname+'　'+x.ali+'）　'+fmtM(Math.min(x.sum,100))+' 元');
+  box.className='transfer show';
+  box.textContent='【加班晚餐报销周结算】'+weekLabel(wk)+'\n'+lines.join('\n')+'\n合计：'+fmtM(total)+' 元\n\n执行：支付宝逐笔转账，备注「加班晚餐报销」。';
+  if(navigator.clipboard){ navigator.clipboard.writeText(box.textContent).then(()=>{ box.textContent+='\n（已复制到剪贴板）'; }); }
+}
+
+function exportCSV(){
+  const head='提交时间,姓名,一级部门,二级部门,用餐日期,通道,下单时间,打卡时间,实付金额,判定结果,可报金额,原因说明,支付宝账号,支付宝实名\n';
+  const body=records.map(r=>[r.createdAt.replace('T',' ').slice(0,16),r.name,r.dept1,r.dept2||'',r.date,r.channel,r.ai&&r.ai.orderTime||'',r.ai&&r.ai.punchTime||'',
+    r.ai&&r.ai.amount||'',(ST[r.status]||['—'])[0],r.amount,r.reason.replace(/[,，]/g,'；'),r.ali,r.aliname].join(',')).join('\n');
+  const blob=new Blob(['\ufeff'+head+body],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='晚餐报销审核台账.csv'; a.click();
+}
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));
+  t.classList.add('on'); document.getElementById('p-'+t.dataset.t).classList.add('on');
+});
+</script>
+</body>
+</html>

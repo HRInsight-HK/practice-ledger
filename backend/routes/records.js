@@ -31,6 +31,21 @@ const upload = multer({
   }
 });
 
+// 简历上传：内存存储 + base64入库存（Render临时文件系统会丢失上传文件）
+const resumeUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB max
+  fileFilter: function (req, file, cb) {
+    const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.doc', '.docx'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('仅支持 PDF / Word / 图片 格式简历'));
+    }
+  }
+});
+
 function addDays(dateStr, days) {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + parseInt(days));
@@ -52,6 +67,30 @@ function genToken() {
 
 const MAX_PRACTICE_DAYS = 7;
 
+// ==================== 联系方式 & 设备表格清洗 ====================
+function sanitizeContact(c) {
+  if (!c || typeof c !== 'object') return null;
+  const contact = {
+    phone: String(c.phone || '').trim(),
+    wecom: String(c.wecom || '').trim(),
+    wechat: String(c.wechat || '').trim()
+  };
+  return (contact.phone || contact.wecom || contact.wechat) ? contact : null;
+}
+
+function sanitizeDevices(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map(d => ({
+    alias: String((d && d.alias) || '').trim(),
+    deviceModel: String((d && d.deviceModel) || '').trim(),
+    brand: String((d && d.brand) || '').trim(),
+    serialNumber: String((d && d.serialNumber) || '').trim(),
+    wecomAccount: String((d && d.wecomAccount) || '').trim(),
+    personalWechat: String((d && d.personalWechat) || '').trim(),
+    otherAccounts: String((d && d.otherAccounts) || '').trim()
+  })).filter(d => d.alias || d.deviceModel || d.brand || d.serialNumber || d.wecomAccount || d.personalWechat || d.otherAccounts);
+}
+
 function filterRecord(r, role) {
   const base = {
     id: r.id,
@@ -65,6 +104,10 @@ function filterRecord(r, role) {
     deviceModel: r.deviceModel || '',
     accessories: r.accessories || '',
     serialNumber: r.serialNumber || '',
+    contact: r.contact || null,
+    devices: r.devices || [],
+    hasResume: !!(r.resume && r.resume.fileData),
+    resumeOriginalName: r.resume ? (r.resume.originalName || '') : '',
     remark: r.remark || '',
     status: r.status,
     hasFeedback: !!r.feedback,
@@ -102,7 +145,7 @@ router.get('/', authMiddleware, (req, res) => {
 });
 
 router.post('/', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
-  const { name, mentor, dept1, dept2, startDate, practiceDays, deviceModel, accessories, serialNumber, remark } = req.body;
+  const { name, mentor, dept1, dept2, startDate, practiceDays, deviceModel, accessories, serialNumber, remark, contact, devices } = req.body;
   if (!name) return res.status(400).json({ error: '请填写实操人员姓名' });
   if (!mentor) return res.status(400).json({ error: '请填写带教人' });
   if (!dept1) return res.status(400).json({ error: '请填写一级部门' });
@@ -127,6 +170,8 @@ router.post('/', authMiddleware, requireRole('admin', 'hr'), async (req, res) =>
     deviceModel: deviceModel || '',
     accessories: accessories || '',
     serialNumber: serialNumber || '',
+    contact: sanitizeContact(contact),
+    devices: sanitizeDevices(devices),
     remark: remark || '',
     status,
     feedback: null,
@@ -154,7 +199,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'hr'), async (req, res) 
   const r = data.records.find(x => x.id === req.params.id);
   if (!r) return res.status(404).json({ error: '记录不存在' });
 
-  const { name, mentor, dept1, dept2, startDate, practiceDays, deviceModel, accessories, serialNumber, remark } = req.body;
+  const { name, mentor, dept1, dept2, startDate, practiceDays, deviceModel, accessories, serialNumber, remark, contact, devices } = req.body;
   if (name !== undefined) r.name = name;
   if (mentor !== undefined) r.mentor = mentor;
   if (dept1 !== undefined) r.dept1 = dept1;
@@ -174,6 +219,8 @@ router.put('/:id', authMiddleware, requireRole('admin', 'hr'), async (req, res) 
   if (deviceModel !== undefined) r.deviceModel = deviceModel;
   if (accessories !== undefined) r.accessories = accessories;
   if (serialNumber !== undefined) r.serialNumber = serialNumber;
+  if (contact !== undefined) r.contact = sanitizeContact(contact);
+  if (devices !== undefined) r.devices = sanitizeDevices(devices);
   if (remark !== undefined) r.remark = remark;
   r.updatedAt = new Date().toISOString();
   await saveData();
@@ -185,6 +232,51 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'hr', 'manager'), asy
   const idx = data.records.findIndex(x => x.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: '记录不存在' });
   data.records.splice(idx, 1);
+  await saveData();
+  res.json({ success: true });
+});
+
+// ==================== SSC 上传/下载/删除 简历（base64入库存，防Render临时文件丢失） ====================
+router.post('/:id/resume', authMiddleware, requireRole('hr', 'admin'), resumeUpload.single('resume'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: '请选择简历文件' });
+
+  const data = getData();
+  const r = data.records.find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: '记录不存在' });
+
+  r.resume = {
+    originalName: req.file.originalname,
+    mimeType: req.file.mimetype,
+    size: req.file.size,
+    fileData: req.file.buffer.toString('base64'),
+    uploadedBy: req.user.username,
+    uploadedAt: new Date().toISOString()
+  };
+  r.updatedAt = new Date().toISOString();
+  await saveData();
+  res.json({ success: true, originalName: r.resume.originalName, uploadedAt: r.resume.uploadedAt });
+});
+
+router.get('/:id/resume', authMiddleware, (req, res) => {
+  const r = getData().records.find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: '记录不存在' });
+  if (!r.resume || !r.resume.fileData) return res.status(404).json({ error: '该人员尚未上传简历' });
+
+  const buf = Buffer.from(r.resume.fileData, 'base64');
+  res.setHeader('Content-Disposition', 'attachment; filename*=UTF-8\'\'' + encodeURIComponent(r.resume.originalName));
+  res.setHeader('Content-Type', r.resume.mimeType || 'application/octet-stream');
+  res.setHeader('Content-Length', buf.length);
+  res.send(buf);
+});
+
+router.delete('/:id/resume', authMiddleware, requireRole('hr', 'admin'), async (req, res) => {
+  const data = getData();
+  const r = data.records.find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: '记录不存在' });
+  if (!r.resume) return res.status(404).json({ error: '该人员尚未上传简历' });
+
+  r.resume = null;
+  r.updatedAt = new Date().toISOString();
   await saveData();
   res.json({ success: true });
 });

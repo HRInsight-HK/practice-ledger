@@ -51,6 +51,8 @@ app.use('/uploads', express.static(UPLOADS_DIR));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/records', require('./routes/records'));
 app.use('/api/questionnaire', require('./routes/questionnaire'));
+app.use('/api/invite', require('./routes/invite'));
+app.use('/api/dinner', require('./routes/dinner'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
@@ -84,7 +86,7 @@ app.get('/api/diagnostic', (req, res) => {
     records: recordSummaries,
     serverTime: new Date().toISOString(),
     note: '如果 UserID 显示 (empty)，说明环境变量未设置，@功能将不生效',
-    buildVersion: 'fix-async-0808'
+    buildVersion: 'supabase-0808'
   });
 });
 
@@ -104,6 +106,18 @@ app.get('/feedback/:token', (req, res) => {
 
 app.get('/questionnaire', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'questionnaire.html'));
+});
+
+app.get('/invite', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'invite.html'));
+});
+
+// 晚餐报销试用模块：员工提交（免登录）+ SSC 台账后台
+app.get('/dinner', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dinner.html'));
+});
+app.get('/dinner-admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dinner-admin.html'));
 });
 
 app.get('*', (req, res) => {
@@ -127,7 +141,8 @@ loadData().then(() => {
     console.log('  实操台账管理系统已启动');
     console.log('  地址: http://localhost:' + PORT);
     console.log('  问卷表单: http://localhost:' + PORT + '/questionnaire');
-    console.log('  数据存储: ' + (process.env.MONGODB_URI ? 'MongoDB Atlas (持久化)' : '文件存储 (临时)'));
+    console.log('  晚餐报销(试用): http://localhost:' + PORT + '/dinner  |  SSC台账: /dinner-admin');
+    console.log('  数据存储: ' + (process.env.DATABASE_URL ? 'PostgreSQL/Supabase (持久化)' : (process.env.MONGODB_URI ? 'MongoDB Atlas (持久化)' : '文件存储 (临时)')));
     console.log('  账号:');
   console.log('    行政: admin (莫青霖)');
   console.log('    SSC:  hr (Zoe)');

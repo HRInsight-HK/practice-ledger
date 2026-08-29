@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工作日加班晚餐报销登记</title>
+<style>
+  :root{ --ink:#1f2937; --sub:#6b7280; --line:#e5e7eb; --bg:#f7f8fa; --card:#fff;
+    --blue:#2563eb; --blue-bg:#eff6ff; --green:#059669; --green-bg:#ecfdf5;
+    --red:#dc2626; --red-bg:#fef2f2; --amber:#d97706; --amber-bg:#fffbeb; --r:10px; }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--ink); font-size:14px; line-height:1.6;}
+  .wrap{max-width:640px; margin:0 auto; padding:20px 14px 60px;}
+  header{text-align:center; margin-bottom:14px;}
+  header h1{font-size:19px;}
+  header .desc{color:var(--sub); font-size:12.5px; margin-top:2px;}
+  .rules{display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin:14px 0;}
+  .rule{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:8px 10px; text-align:center;}
+  .rule b{display:block; font-size:16px; color:var(--blue);}
+  .rule span{font-size:11.5px; color:var(--sub);}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:16px; margin-bottom:12px;}
+  .card h3{font-size:14.5px; margin-bottom:10px; padding-bottom:7px; border-bottom:1px solid var(--line);}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  @media(max-width:420px){.grid2{grid-template-columns:1fr;}}
+  label{display:block; font-size:12px; color:var(--sub); margin-bottom:3px;}
+  label em{color:var(--red); font-style:normal;}
+  input,select{width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px; background:#fff;}
+  input:focus,select:focus{outline:none; border-color:var(--blue);}
+  .btn{display:block; width:100%; padding:12px; background:var(--blue); color:#fff; border:none; border-radius:8px; font-size:15px; cursor:pointer; font-weight:600;}
+  .btn:hover{opacity:.92;}
+  .btn.small{display:inline-block; width:auto; padding:6px 14px; font-size:12.5px; font-weight:500;}
+  .ai-box{background:var(--blue-bg); border:1px solid #bfdbfe; border-radius:var(--r); padding:12px;}
+  .ai-note{font-size:11.5px; color:var(--sub); margin-top:8px;}
+  .up{border:1.5px dashed var(--line); border-radius:var(--r); padding:12px; text-align:center; color:var(--sub); font-size:12.5px; background:#fafbfc;}
+  .up img{max-width:100%; max-height:140px; border-radius:6px; margin-top:6px;}
+  .result{border-radius:var(--r); padding:14px; margin-top:12px; display:none;}
+  .result.ok{display:block; background:var(--green-bg); border:1px solid #a7f3d0;}
+  .result.no{display:block; background:var(--red-bg); border:1px solid #fecaca;}
+  .result h4{font-size:15px; margin-bottom:6px;}
+  .result.ok h4{color:var(--green);} .result.no h4{color:var(--red);}
+  .result ul{list-style:none;} .result li{padding:2px 0; font-size:13px;}
+  .notice{background:#f3f4f6; border-radius:10px; padding:11px 13px; margin-top:12px; font-size:12.5px; white-space:pre-wrap; display:none;}
+  .notice.show{display:block;}
+  .notice .t{font-size:11px; color:var(--sub); margin-bottom:4px;}
+  .err{background:var(--red-bg); border:1px solid #fecaca; color:var(--red); border-radius:8px; padding:9px 12px; font-size:13px; margin-top:12px; display:none;}
+  .err.show{display:block;}
+  .tip{background:var(--amber-bg); border:1px solid #fde68a; border-radius:var(--r); padding:9px 12px; font-size:12px; color:#92400e; margin-bottom:12px;}
+  .loading{display:inline-block; width:13px; height:13px; border:2px solid var(--blue); border-top-color:transparent; border-radius:50%; animation:spin .8s linear infinite; vertical-align:-2px; margin-right:5px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .steps{font-size:12.5px; color:var(--sub); background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:9px 13px; margin-bottom:12px;}
+  .steps b{color:var(--blue);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🧾 工作日加班晚餐报销登记</h1>
+    <div class="desc">提交后 AI 自动审核，结果即时反馈 · 报销款随本周结算支付宝转账</div>
+  </header>
+
+  <div class="steps">员工三步：<b>①</b> 填基础信息 → <b>②</b> 上传两张截图（外卖完成 + 下班打卡）→ <b>③</b> 首次填支付宝账号与实名姓名</div>
+
+  <div class="rules">
+    <div class="rule"><b>19:30</b><span>外卖下单 ≥ 19:30 直接可报</span></div>
+    <div class="rule"><b>20:30</b><span>下单 &lt; 19:30 需打卡 ≥ 20:30</span></div>
+    <div class="rule"><b>25 元</b><span>单餐封顶</span></div>
+    <div class="rule"><b>100 元</b><span>每人每周累计封顶</span></div>
+  </div>
+
+  <div class="card">
+    <h3>① 基本信息</h3>
+    <div class="grid2">
+      <div><label>姓名 <em>*</em></label><input id="f-name" placeholder="如：张三"></div>
+      <div><label>一级部门 <em>*</em></label><input id="f-dept1" placeholder="如：行政部"></div>
+      <div><label>二级部门（选填）</label><input id="f-dept2" placeholder="如：行政一组"></div>
+      <div><label>用餐日期 <em>*</em></label><input type="date" id="f-date"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>② 截图上传</h3>
+    <div class="grid2">
+      <div class="up" id="up-order" onclick="document.getElementById('file-order').click()">📷 外卖订单完成截图<br>（需含下单时间、订单号、实付金额）<img id="prev-order" style="display:none"><input type="file" id="file-order" accept="image/*" hidden></div>
+      <div class="up" id="up-punch" onclick="document.getElementById('file-punch').click()">📷 下班打卡截图<br>（需含打卡日期与时间）<img id="prev-punch" style="display:none"><input type="file" id="file-punch" accept="image/*" hidden></div>
+    </div>
+    <div class="tip" style="margin:10px 0 0;">⚠️ 请确保截图完整清晰，能看到下单时间、订单号、金额、打卡时间，否则 AI 无法识别会判不通过。</div>
+  </div>
+
+  <div class="card">
+    <h3>③ AI 识别结果</h3>
+    <div class="ai-box">
+      <button class="btn small" id="btn-ai" onclick="simulateAI()">🤖 开始 AI 识别</button>
+      <span id="ai-status" style="font-size:12px; color:var(--sub); margin-left:8px;">上传截图后点击识别</span>
+      <div class="grid2" style="margin-top:10px;">
+        <div><label>外卖下单时间</label><input id="ai-order" placeholder="19:42"></div>
+        <div><label>订单完成时间</label><input id="ai-done" placeholder="20:05"></div>
+        <div><label>订单号</label><input id="ai-no" placeholder="从截图自动提取"></div>
+        <div><label>实付金额（元）</label><input id="ai-amount" type="number" step="0.1" placeholder="23.5"></div>
+        <div><label>下班打卡时间</label><input id="ai-punch" placeholder="21:10"></div>
+        <div><label>打卡日期</label><input type="date" id="ai-punchdate"></div>
+      </div>
+      <div class="ai-note">试用版：识别字段由员工核对填写（或点上方按钮自动模拟）；正式版由视觉大模型自动从截图提取，员工无需填写。</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>④ 收款信息（首次填写）</h3>
+    <div class="grid2">
+      <div><label>支付宝账号 <em>*</em></label><input id="f-ali" placeholder="手机号或邮箱"></div>
+      <div><label>支付宝实名姓名 <em>*</em></label><input id="f-aliname" placeholder="填真实姓名，勿填小名"></div>
+    </div>
+    <div class="tip" style="margin-top:10px;">💡 请填<b>真实姓名</b>，姓名与账号不符转账会退回；收款人姓名将与花名册核对。</div>
+  </div>
+
+  <button class="btn" id="btn-submit" onclick="submitForm()">提交审核</button>
+
+  <div class="err" id="err"></div>
+  <div class="result" id="result"></div>
+  <div class="notice" id="notice"><div class="t">—— 企微「人事行政小助手」将推送 ——</div><div id="notice-body"></div></div>
+</div>
+
+<script>
+const API = location.origin.startsWith('http') && !location.origin.includes('localhost') && !location.origin.includes('127.0.0.1')
+  ? location.origin + '/api/dinner' : '/api/dinner';
+
+function toMin(t){ if(!t||!/^\d{1,2}:\d{2}$/.test(t)) return null; const [h,m]=t.split(':').map(Number); return h*60+m; }
+function addMin(t,n){ let m=toMin(t)+n; return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+function randTime(h1,m1,h2,m2){ const a=h1*60+m1,b=h2*60+m2,t=a+Math.floor(Math.random()*(b-a));
+  return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); }
+
+document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
+
+['file-order','file-punch'].forEach(id=>{
+  document.getElementById(id).onchange = e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const img=document.getElementById(id==='file-order'?'prev-order':'prev-punch');
+    const rd=new FileReader();
+    rd.onload=()=>{ img.src=rd.result; img.style.display='block'; };
+    rd.readAsDataURL(f);
+  };
+});
+
+function simulateAI(){
+  const btn=document.getElementById('btn-ai'), st=document.getElementById('ai-status');
+  const date=document.getElementById('f-date').value||new Date().toISOString().slice(0,10);
+  btn.disabled=true;
+  st.innerHTML='<span class="loading"></span>识别中…';
+  setTimeout(()=>{
+    const r=Math.random();
+    const orderTime = r<0.45 ? randTime(19,35,21,0) : randTime(18,50,19,25);
+    const punchTime = randTime(20,0,21,35);
+    document.getElementById('ai-order').value=orderTime;
+    document.getElementById('ai-done').value=addMin(orderTime,20+Math.floor(Math.random()*25));
+    document.getElementById('ai-no').value='MT'+date.replace(/-/g,'')+Math.random().toString(36).slice(2,7).toUpperCase();
+    document.getElementById('ai-amount').value=(15+Math.random()*20).toFixed(1);
+    document.getElementById('ai-punch').value=punchTime;
+    document.getElementById('ai-punchdate').value=date;
+    btn.disabled=false; btn.textContent='🔄 重新识别';
+    st.textContent='识别完成 ✅ 请核对，可手动修正';
+  },900);
+}
+
+function submitForm(){
+  const g=id=>document.getElementById(id).value.trim();
+  const form={ name:g('f-name'), dept1:g('f-dept1'), dept2:g('f-dept2'), date:g('f-date'),
+    ali:g('f-ali'), aliname:g('f-aliname'),
+    orderTime:g('ai-order'), doneTime:g('ai-done'), orderNo:g('ai-no'),
+    amount:g('ai-amount'), punchTime:g('ai-punch'), punchDate:g('ai-punchdate') };
+  const err=document.getElementById('err');
+  err.className='err';
+  if(!form.name||!form.dept1||!form.date){ err.textContent='请填写姓名、一级部门、用餐日期'; err.className='err show'; return; }
+  if(!form.ali||!form.aliname){ err.textContent='请填写支付宝账号与实名姓名（用于转账）'; err.className='err show'; return; }
+  if(!form.orderTime||!form.punchTime||!form.orderNo||!(Number(form.amount)>0)){ err.textContent='请先完成 AI 识别（或手动填写下单时间、打卡时间、订单号、实付金额）'; err.className='err show'; return; }
+
+  const btn=document.getElementById('btn-submit');
+  btn.disabled=true; btn.textContent='审核中…';
+  fetch(API, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) })
+    .then(r=>r.json().then(j=>({ok:r.ok, j})))
+    .then(({ok,j})=>{
+      if(!ok){ err.textContent=j.error||'提交失败，请稍后重试'; err.className='err show'; return; }
+      showResult(form, j);
+    })
+    .catch(()=>{ err.textContent='网络错误，请稍后重试'; err.className='err show'; })
+    .finally(()=>{ btn.disabled=false; btn.textContent='提交审核'; });
+}
+
+function fmtM(n){ return (Math.round(n*10)/10).toFixed(1); }
+function showResult(form, j){
+  const box=document.getElementById('result'), nt=document.getElementById('notice'), nb=document.getElementById('notice-body');
+  const d=new Date(form.date+'T00:00:00');
+  const dateStr=(d.getMonth()+1)+'月'+d.getDate()+'日';
+  const pass=j.pass;
+  box.className='result '+(pass?'ok':'no');
+  let html='<h4>'+(pass?'✅ 审核通过':'❌ 审核未通过')+'</h4><ul>';
+  html+='<li><b>'+form.name+'</b>（'+form.dept1+'）· '+dateStr+' · 通道 '+j.channel+'</li>';
+  html+='<li>下单 '+form.orderTime+'　打卡 '+form.punchTime+'　实付 '+fmtM(Number(form.amount))+' 元</li>';
+  html+='<li>'+j.reason+'</li>';
+  if(pass) html+='<li>本次可报：<b>'+fmtM(j.amount)+' 元</b>（随本周结算统一支付宝转账）</li>';
+  html+='</ul>';
+  box.innerHTML=html;
+  nt.className='notice show';
+  nb.textContent = pass
+    ? '【晚餐报销审核通过】✅\n'+form.name+' 你好，你 '+dateStr+' 的晚餐报销已通过 AI 审核：\n• 通道：'+j.channel+'（'+(j.channel==='A'?'下单 ≥ 19:30':'下单 < 19:30，打卡 ≥ 20:30')+'）\n• 实付 '+fmtM(Number(form.amount))+' 元，可报 '+fmtM(j.amount)+' 元\n• 本周累计：'+fmtM(j.weekUsed)+' → '+fmtM(j.weekUsed+j.amount)+' 元（周封顶 100 元）\n报销款随本周结算统一支付宝转账，请留意到账。'
+    : '【晚餐报销审核未通过】⚠️\n'+form.name+' 你好，你 '+dateStr+' 的晚餐报销未通过 AI 审核，原因：\n• '+j.reason+'\n可补交材料后重新提交；如有疑问请联系 SSC（钟艺）。';
+  box.scrollIntoView({behavior:'smooth'});
+}
+</script>
+</body>
+</html>

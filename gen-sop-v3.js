@@ -77,7 +77,7 @@ const NOTIFICATIONS = [
 function createSOP() {
   return makeDoc([
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 80 }, children: [new TextRun({ text: '实操人员全流程管理SOP', bold: true, size: 40, color: BLUE, font: FONT })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: 'Version 3.2  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: 'Version 3.3  |  2026年8月', size: 20, color: GRAY, font: FONT })] }),
     authorLine(),
     statusBadge(),
     emptyLine(),
@@ -88,8 +88,8 @@ function createSOP() {
     makeTable(['角色', '人员', '系统账号', '密码', '核心职责'],
       [
         [{text:'需求方',bold:true}, '组长 / 管理层', '-', '-', '发起实操需求，填写问卷表单，须提前>=3天'],
-        [{text:'行政',bold:true}, '莫青霖', 'admin', 'Zz741852', '处理问卷、登记人员信息、录入设备、跟踪状态'],
-        [{text:'SSC',bold:true}, 'Zoe', 'hr', 'Zoe20260708', '录入薪资（本地不上云）、跟进反馈、办理入职/结算、账号管理'],
+        [{text:'行政',bold:true}, '莫青霖', 'admin', 'Zz741852', '处理问卷、登记人员信息/联系方式/设备台账、跟踪状态'],
+        [{text:'SSC',bold:true}, 'Zoe', 'hr', 'Zoe20260708', '上传简历、录入薪资（本地不上云）、跟进反馈、办理入职/结算、账号管理'],
         [{text:'HRD',bold:true}, 'massie', 'manager', '4302055540j', '审批正式入职、查看全量数据、关注风险预警、账号管理'],
       ], [12, 15, 12, 12, 49]),
     emptyLine(),
@@ -110,8 +110,8 @@ function createSOP() {
     makeTable(['阶段', '动作', '负责人', '企微通知', '时间节点'],
       [
         [{text:'1. 需求提交',bold:true}, '填写问卷表单', '需求方(组长/管理层)', '@全员', '入职前>=3天'],
-        [{text:'2. 行政登记',bold:true}, '导入问卷->补充设备', '行政(莫青霖)', '@青霖', '实操首日'],
-        [{text:'3. SSC录入',bold:true}, '填写薪资（本地工具）', 'SSC(Zoe)', '-', '实操首日'],
+        [{text:'2. 行政登记',bold:true}, '导入问卷->登记联系方式+设备台账', '行政(莫青霖)', '@青霖', '实操首日'],
+        [{text:'3. SSC录入',bold:true}, '上传简历+填写薪资（本地工具）', 'SSC(Zoe)', '-', '实操首日'],
         [{text:'4. 到期跟进',bold:true}, '跟进反馈->记录结果+凭证', 'SSC(Zoe)/带教人', '@SSC(T-3/T-1)', '结束前3天起'],
         [{text:'5. 入职/结算',bold:true}, '通过->入职 / 不通过->结算', 'SSC(Zoe)', '@HRD+@SSC', '反馈当天'],
       ], [15, 30, 18, 17, 20]),
@@ -140,8 +140,8 @@ function createSOP() {
     makeTable(['角色', '核心职责', '系统权限'],
       [
         [{text:'需求方(组长/管理层)',bold:true}, '提交实操需求问卷', '免登录填写问卷'],
-        [{text:'行政(莫青霖)',bold:true}, '处理问卷->登记设备->跟踪状态', '登记/编辑/查看（无薪资）'],
-        [{text:'SSC(Zoe)',bold:true}, '录入薪资->跟进反馈->办理入职/结算->账号管理', '全量读写（薪资在本地）'],
+        [{text:'行政(莫青霖)',bold:true}, '处理问卷->登记联系方式/设备台账->跟踪状态', '登记/编辑/查看（无薪资）'],
+        [{text:'SSC(Zoe)',bold:true}, '上传简历->录入薪资->跟进反馈->办理入职/结算->账号管理', '全量读写（薪资在本地）'],
         [{text:'带教人',bold:true}, '填写实操反馈表单（免登录）', '仅反馈表单'],
         [{text:'HRD(massie)',bold:true}, '查看全量数据->审批->账号管理', '只读全量'],
       ], [18, 47, 35]),
@@ -167,7 +167,7 @@ function createSOP() {
     bullet('所有操作留痕，系统记录操作人、时间、来源'),
     emptyLine(),
     tipBox('系统已部署到云端：' + CLOUD_URL + ' 。问卷表单地址：' + Q_URL + ' 。'),
-  ], '实操人员管理SOP v3.2');
+  ], '实操人员管理SOP v3.3');
 }
 
 // ==================== Document 2: 领导决策摘要 ====================
@@ -183,11 +183,20 @@ function createLeadershipGuide() {
     p('一套系统解决实操人员从需求到入职的全流程管理，自动驱动各角色按时完成操作，杜绝信息不同步、反馈遗漏、用工风险。'),
     emptyLine(),
 
+    h2('近期功能升级（2026年8月）'),
+    makeTable(['功能', '说明', '价值'],
+      [
+        [{text:'简历电子化归档',bold:true}, 'SSC上传人员简历（PDF/Word/图片，不超过2MB），云端永久保存', '纸质简历电子化，随时调取，不随系统重启丢失'],
+        [{text:'联系方式登记',bold:true}, '行政登记电话/企微/私人微信', '人员失联或异常时可快速取得联系'],
+        [{text:'设备台账表格化',bold:true}, '每台设备一行：花名/型号/品牌/序列号/企微账号/微信/其他账号', '设备与账号一一绑定，离场交接有据可查'],
+      ], [22, 42, 36]),
+    emptyLine(),
+
     h2('角色与人员'),
     makeTable(['角色', '人员', '系统账号', '核心职责'],
       [
-        ['行政', '莫青霖', 'admin', '登记人员、录入设备'],
-        ['SSC', 'Zoe', 'hr', '薪资录入、跟进反馈、办理入职/结算'],
+        ['行政', '莫青霖', 'admin', '登记人员/联系方式/设备台账'],
+        ['SSC', 'Zoe', 'hr', '简历归档、薪资录入、跟进反馈、办理入职/结算'],
         ['HRD', 'massie', 'manager', '审批入职、关注风险、账号管理'],
       ], [15, 15, 15, 55]),
     emptyLine(),
@@ -202,7 +211,7 @@ function createLeadershipGuide() {
     emptyLine(),
 
     h2('流程一览'),
-    p('问卷提交(@全员) -> 行政登记(@青霖) -> SSC录薪 -> 到期跟进(@SSC) -> 反馈结果(@HRD+@全员) -> 入职/结算(@HRD+@SSC)', { bold: true, color: BLUE }),
+    p('问卷提交(@全员) -> 行政登记(@青霖) -> SSC上传简历+录薪 -> 到期跟进(@SSC) -> 反馈结果(@HRD+@全员) -> 入职/结算(@HRD+@SSC)', { bold: true, color: BLUE }),
     p('全流程由企微群机器人自动驱动，无需人工催办。'),
     emptyLine(),
 
@@ -225,7 +234,7 @@ function createLeadershipGuide() {
     h2('数据安全'),
     makeTable(['层级', '存储内容', '位置'],
       [
-        [{text:'云端系统',bold:true}, '姓名/带教/日期/设备/反馈/状态', CLOUD_URL],
+        [{text:'云端系统',bold:true}, '姓名/带教/日期/联系方式/设备/简历/反馈/状态', CLOUD_URL],
         [{text:'企微机器人',bold:true}, '只发提醒，不存数据', '企微群'],
         [{text:'本地SSC工具',bold:true,color:RED}, '薪资结构/金额', 'SSC(Zoe)个人电脑（加密）'],
       ], [25, 45, 30]),
@@ -235,8 +244,8 @@ function createLeadershipGuide() {
     h2('角色权限'),
     makeTable(['角色', '人员', '权限', '关注点'],
       [
-        ['行政', '莫青霖', '登记/编辑', '设备信息、实操周期'],
-        ['SSC', 'Zoe', '全量读写', '薪资、反馈、入职/结算'],
+        ['行政', '莫青霖', '登记/编辑', '联系方式、设备台账、实操周期'],
+        ['SSC', 'Zoe', '全量读写', '简历、薪资、反馈、入职/结算'],
         ['HRD', 'massie', '只读全量', '统计数据、风险预警'],
       ], [15, 15, 20, 50]),
     emptyLine(),
@@ -256,14 +265,14 @@ function createLeadershipGuide() {
       ], [25, 25, 25, 25]),
     emptyLine(),
     tipBox('系统已部署上线：' + CLOUD_URL),
-  ], '领导决策摘要 v3.2');
+  ], '领导决策摘要 v3.3');
 }
 
 // ==================== Document 3: 需求方操作SOP ====================
 function createRequesterSOP() {
   return makeDoc([
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 80 }, children: [new TextRun({ text: '需求方操作SOP', bold: true, size: 36, color: BLUE, font: FONT })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: 'Version 3.2  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: 'Version 3.3  |  2026年8月', size: 20, color: GRAY, font: FONT })] }),
     authorLine(),
     statusBadge(),
     emptyLine(),
@@ -323,14 +332,14 @@ function createRequesterSOP() {
     bullet('如有紧急需求，直接联系行政（莫青霖）或SSC（Zoe）'),
     emptyLine(),
     tipBox('紧急联系方式：行政 莫青霖 / SSC Zoe（通过企微群联系）'),
-  ], '需求方操作SOP v3.2');
+  ], '需求方操作SOP v3.3');
 }
 
 // ==================== Document 4: 行政操作SOP ====================
 function createAdminSOP() {
   return makeDoc([
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 80 }, children: [new TextRun({ text: '行政操作SOP', bold: true, size: 36, color: BLUE, font: FONT })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: 'Version 3.2  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: 'Version 3.3  |  2026年8月', size: 20, color: GRAY, font: FONT })] }),
     authorLine(),
     statusBadge(),
     emptyLine(),
@@ -364,9 +373,9 @@ function createAdminSOP() {
     bullet('二级部门（选填）'),
     bullet('开始日期（确认或修改）'),
     bullet('预计实操天数（确认，如>7天会预警）'),
-    bullet('设备型号（如：ThinkPad T14）'),
-    bullet('序列号'),
-    bullet('配件情况（如：扩展坞、外接显示器）'),
+    bullet('联系方式：电话 / 企业微信 / 私人微信'),
+    bullet('设备台账：点击"+ 添加设备"逐行登记，每行字段包含 花名、设备型号、品牌、序列号、企业微信账号、私人微信账号、其他账号登记'),
+    bullet('多台设备时每台单独一行，可随时增加或删除行'),
     bullet('备注'),
     p('点击"确认登记"完成。'),
     emptyLine(),
@@ -391,7 +400,7 @@ function createAdminSOP() {
     bullet('行政只能查看人员信息和设备信息，无法查看薪资'),
     bullet('如需修改已登记的信息，点击对应记录的"编辑"按钮'),
     bullet('问卷可"忽略"（如重复提交或无效需求）'),
-    bullet('设备信息务必准确填写，包括序列号'),
+    bullet('设备台账逐行登记，序列号务必准确；联系方式（电话/企微/微信）一并登记'),
     emptyLine(),
 
     h2('五、角色协作'),
@@ -404,20 +413,20 @@ function createAdminSOP() {
         ['入职/结算', '-', '办理入职或结算', '收到@HRD通知'],
         ['风险预警', '关注>7天预警', '-', '关注逾期3天预警'],
       ], [15, 30, 30, 25]),
-  ], '行政操作SOP v3.2');
+  ], '行政操作SOP v3.3');
 }
 
 // ==================== Document 5: SSC操作SOP ====================
 function createSSCSOP() {
   return makeDoc([
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 80 }, children: [new TextRun({ text: 'SSC操作SOP', bold: true, size: 36, color: BLUE, font: FONT })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: 'Version 3.2  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: 'Version 3.3  |  2026年8月', size: 20, color: GRAY, font: FONT })] }),
     authorLine(),
     statusBadge(),
     emptyLine(),
 
     h2('一、适用对象'),
-    p('SSC（Zoe），负责实操期间的薪资录入、反馈跟进、入职/结算办理。'),
+    p('SSC（Zoe），负责实操期间的简历归档、薪资录入、反馈跟进、入职/结算办理。'),
     emptyLine(),
 
     h2('二、系统入口'),
@@ -479,7 +488,20 @@ function createSSCSOP() {
     warningBox('薪资数据仅存储在本地浏览器中，绝不上传云端！清除浏览器数据将导致丢失，请定期导出备份。'),
     emptyLine(),
 
-    h3('3.2 实操反馈记录（云端后台）'),
+    h3('3.2 人员简历上传（云端后台）'),
+    p('实操人员简历由SSC统一上传归档，支持 PDF / Word / 图片格式，单文件不超过2MB。'),
+    p('操作步骤：'),
+    bullet('登录云端后台，在人员列表找到目标人员'),
+    bullet('点击"📎简历"按钮（或详情页中的简历入口）'),
+    bullet('选择本地简历文件，点击"上传简历"'),
+    bullet('已上传的简历可点击文件名下载，重新上传可替换，也可删除'),
+    emptyLine(),
+    p('说明：'),
+    bullet('简历存储在云端数据库，永久保存，不随系统重启丢失'),
+    bullet('行政与SSC均可上传/管理简历，HRD可下载查看'),
+    emptyLine(),
+
+    h3('3.3 实操反馈记录（云端后台）'),
     p('实操即将到期时，系统自动提醒：'),
     bullet('T-3（结束前3天）：@SSC 通知，提醒跟进反馈'),
     bullet('T-1（结束前1天）：@SSC 再次提醒'),
@@ -495,7 +517,7 @@ function createSSCSOP() {
     p('3. 提交后，系统自动通知@HRD（massie）+ @全员'),
     emptyLine(),
 
-    h3('3.3 办理入职/结算'),
+    h3('3.4 办理入职/结算'),
     p('反馈提交后，状态变为"已反馈"。根据反馈结果：'),
     emptyLine(),
     makeTable(['反馈结果', '操作', '通知', '工具'],
@@ -536,14 +558,14 @@ function createSSCSOP() {
     bullet('SSC可查看登录日志，审计设备使用情况'),
     emptyLine(),
     tipBox('本地SSC工具地址：http://localhost:8080/hr-local.html（需先执行 python -m http.server 8080 启动）。云端后台地址：' + CLOUD_URL),
-  ], 'SSC操作SOP v3.2');
+  ], 'SSC操作SOP v3.3');
 }
 
 // ==================== Document 6: 系统操作指南(完整版) ====================
 function createFullGuide() {
   return makeDoc([
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 80 }, children: [new TextRun({ text: '实操台账系统操作指南', bold: true, size: 40, color: BLUE, font: FONT })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: '完整版  |  Version 3.2  |  2026年7月', size: 20, color: GRAY, font: FONT })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: '完整版  |  Version 3.3  |  2026年8月', size: 20, color: GRAY, font: FONT })] }),
     authorLine(),
     statusBadge(),
     emptyLine(),
@@ -556,8 +578,8 @@ function createFullGuide() {
     makeTable(['角色', '人员', '系统账号', '密码', '核心职责'],
       [
         [{text:'需求方',bold:true}, '组长 / 管理层', '-', '-', '发起实操需求，填写问卷表单，须提前>=3天'],
-        [{text:'行政',bold:true}, '莫青霖', 'admin', 'Zz741852', '处理问卷、登记人员信息、录入设备、跟踪状态'],
-        [{text:'SSC',bold:true}, 'Zoe', 'hr', 'Zoe20260708', '录入薪资（本地不上云）、跟进反馈、办理入职/结算、账号管理'],
+        [{text:'行政',bold:true}, '莫青霖', 'admin', 'Zz741852', '处理问卷、登记人员信息/联系方式/设备台账、跟踪状态'],
+        [{text:'SSC',bold:true}, 'Zoe', 'hr', 'Zoe20260708', '上传简历、录入薪资（本地不上云）、跟进反馈、办理入职/结算、账号管理'],
         [{text:'HRD',bold:true}, 'massie', 'manager', '4302055540j', '审批正式入职、查看全量数据、关注风险预警、账号管理'],
       ], [12, 15, 12, 12, 49]),
     emptyLine(),
@@ -575,7 +597,7 @@ function createFullGuide() {
     h1('四、数据架构（三层数据隔离）'),
     makeTable(['层级', '存储内容', '位置', '安全性'],
       [
-        [{text:'云端系统',bold:true}, '姓名/带教/日期/设备/反馈/状态', CLOUD_URL, '公网访问，不含薪资'],
+        [{text:'云端系统',bold:true}, '姓名/带教/日期/联系方式/设备/简历/反馈/状态', CLOUD_URL, '公网访问，不含薪资'],
         [{text:'企微机器人',bold:true}, '只发提醒，不存数据', '企微群', '仅通知转发'],
         [{text:'本地SSC工具',bold:true,color:RED}, '薪资结构/金额', 'SSC个人电脑', '物理隔离，绝不上云'],
       ], [18, 35, 27, 20]),
@@ -600,7 +622,9 @@ function createFullGuide() {
     h3('6.2 行政登记（行政 莫青霖）'),
     bullet('登录管理后台：' + CLOUD_URL + '（admin / Zz741852）'),
     bullet('点击"问卷需求"查看待处理问卷'),
-    bullet('点击"导入登记"，确认/补充一级部门、二级部门、设备信息'),
+    bullet('点击"导入登记"，确认/补充一级部门、二级部门'),
+    bullet('登记联系方式（电话/企业微信/私人微信）'),
+    bullet('登记设备台账：每台设备一行，字段为花名、设备型号、品牌、序列号、企业微信账号、私人微信账号、其他账号登记'),
     bullet('如天数>7天，系统自动发送用工风险预警@HRD + @全员，提醒SSC提前核算薪资并准备反馈结果收集'),
     bullet('登记后系统自动@青霖通知'),
     emptyLine(),
@@ -618,7 +642,13 @@ function createFullGuide() {
     warningBox('薪资数据仅存储在本地浏览器，绝不上云。清除浏览器数据将导致丢失，请定期导出备份。'),
     emptyLine(),
 
-    h3('6.4 到期跟进（SSC Zoe）'),
+    h3('6.4 人员简历上传（SSC Zoe）'),
+    bullet('登录云端后台，在人员列表点击"📎简历"按钮'),
+    bullet('选择简历文件上传（支持 PDF/Word/图片，单文件不超过2MB）'),
+    bullet('简历云端永久保存，可下载、替换、删除'),
+    emptyLine(),
+
+    h3('6.5 到期跟进（SSC Zoe）'),
     p('系统自动按时间节点发送企微通知：'),
     makeTable(['时间', '通知内容', '@对象', 'SSC动作'],
       [
@@ -629,7 +659,7 @@ function createFullGuide() {
       ], [20, 25, 17, 38]),
     emptyLine(),
 
-    h3('6.5 反馈记录（SSC Zoe）'),
+    h3('6.6 反馈记录（SSC Zoe）'),
     bullet('在云端后台找到对应人员，点击"填写反馈"'),
     bullet('选择反馈结果：通过（建议入职）/ 不通过（结算离场）'),
     bullet('填写出勤记录、反馈意见'),
@@ -637,7 +667,7 @@ function createFullGuide() {
     bullet('提交后，系统自动通知@HRD（massie）+ @全员'),
     emptyLine(),
 
-    h3('6.6 入职/结算（SSC Zoe + HRD massie）'),
+    h3('6.7 入职/结算（SSC Zoe + HRD massie）'),
     p('反馈通过：'),
     bullet('SSC在云端后台点击"办理入职"'),
     bullet('填写入职日期'),
@@ -668,7 +698,37 @@ function createFullGuide() {
       ], [20, 25, 25, 30]),
     emptyLine(),
     tipBox('系统已部署上线：' + CLOUD_URL + ' 。问卷表单地址：' + Q_URL + ' 。'),
-  ], '系统操作指南(完整版) v3.2');
+  ], '系统操作指南(完整版) v3.3');
+}
+
+// ==================== Document 7: 老板汇报（升级简报） ====================
+function createBossReport() {
+  return makeDoc([
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 80 }, children: [new TextRun({ text: '实操人员管理流程升级汇报', bold: true, size: 40, color: BLUE, font: FONT })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 40 }, children: [new TextRun({ text: '2026年8月  |  汇报人：Zoe（SSC）', size: 20, color: GRAY, font: FONT })] }),
+    emptyLine(),
+
+    h2('一、背景'),
+    p('实操台账系统自上线以来已稳定运行，覆盖需求提交、行政登记、薪资录入、到期跟进、反馈记录、入职/结算全流程，各节点由企微机器人自动提醒，无需人工催办。结合近期实际使用中的反馈，本次对流程做了三项升级，进一步补全人员信息归档，强化可追溯性。'),
+    emptyLine(),
+
+    h2('二、本次升级内容'),
+    p('1. 简历电子化归档：SSC统一上传实操人员简历（支持PDF/Word/图片，单文件不超过2MB），存储在云端数据库，永久保存、随时调取，不再依赖纸质文件或聊天记录。'),
+    p('2. 联系方式登记：行政登记实操人员时，同步登记电话、企业微信、私人微信，人员失联或异常时可第一时间取得联系。'),
+    p('3. 设备台账表格化：设备登记由单条记录改为表格化管理，每台设备一行，字段包含花名、设备型号、品牌、序列号、企业微信账号、私人微信账号、其他账号登记，设备与账号一一绑定，人员离场交接有据可查。'),
+    emptyLine(),
+
+    h2('三、升级价值'),
+    p('1. 信息归档完整：简历、联系方式、设备账号全部电子化集中管理，随时可查。'),
+    p('2. 追溯有据：设备序列号与人员账号绑定，避免设备与账号纠纷。'),
+    p('3. 安全底线不变：薪资数据仍存储在SSC本地加密工具，绝不上云；简历、设备等一般信息存云端，权限分级管理。'),
+    emptyLine(),
+
+    h2('四、需协调事项'),
+    p('请各角色按新流程执行：行政登记时补录联系方式与设备台账；SSC收到实操人员简历后及时上传归档。'),
+    emptyLine(),
+    tipBox('系统地址：' + CLOUD_URL),
+  ], '实操流程升级汇报 v3.3');
 }
 
 // ==================== Generate All ====================
@@ -683,6 +743,7 @@ async function generate() {
     { fn: createAdminSOP, name: '行政操作SOP.docx' },
     { fn: createSSCSOP, name: 'SSC操作SOP.docx' },
     { fn: createFullGuide, name: '系统操作指南(完整版).docx' },
+    { fn: createBossReport, name: '实操流程升级汇报.docx' },
   ];
 
   let ok = 0, fail = 0;
