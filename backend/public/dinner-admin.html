@@ -83,7 +83,7 @@
           <button class="btn small ghost" onclick="exportCSV()">⬇ 导出 CSV</button>
         </div>
         <div class="scroll"><table id="tbl"><thead><tr>
-          <th>提交时间</th><th>姓名</th><th>一级部门</th><th>用餐日期</th><th>通道</th><th>下单</th><th>打卡</th><th>实付</th><th>判定</th><th>可报</th><th>原因 / 说明</th><th>支付宝</th><th></th>
+          <th>提交时间</th><th>姓名</th><th>一级部门</th><th>用餐日期</th><th>通道</th><th>拼单</th><th>下单</th><th>打卡</th><th>实付</th><th>判定</th><th>可报</th><th>原因 / 说明</th><th>支付宝</th><th></th>
         </tr></thead><tbody></tbody></table></div>
         <div class="summary" id="ledger-summary"></div>
       </div>
@@ -110,8 +110,9 @@
 <script>
 const TOKEN_KEY='dinner_admin_token', USER_KEY='dinner_admin_user';
 let records=[];
-const ST={PASS_A:['通过','g'],PASS_B:['通过','g'],PASS_CAPPED:['通过(周封顶)','a'],
-  FAIL_BLUR:['不通过','r'],FAIL_DATE:['不通过','r'],FAIL_DUP:['不通过','r'],FAIL_TIME:['不通过','r'],FAIL_WEEKCAP:['不通过','r']};
+const ST={PASS_A:['通过','g'],PASS_B:['通过','g'],PASS_CAPPED:['通过(封顶)','a'],
+  FAIL_BLUR:['不通过','r'],FAIL_DATE:['不通过','r'],FAIL_DUP:['不通过','r'],FAIL_TIME:['不通过','r'],
+  FAIL_WEEKCAP:['不通过(周满)','r'],FAIL_ORDERCAP:['不通过(单满)','r']};
 
 function api(path,opts){ const h={'Content-Type':'application/json'};
   const t=localStorage.getItem(TOKEN_KEY); if(t) h['Authorization']='Bearer '+t;
@@ -164,14 +165,16 @@ function renderLedger(){
   document.querySelector('#tbl tbody').innerHTML=list.map(r=>{
     const [txt,cls]=ST[r.status]||['—','b'];
     return '<tr><td>'+r.createdAt.replace('T',' ').slice(0,16)+'</td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.dept1)+(r.dept2?' / '+esc(r.dept2):'')+'</td><td>'+r.date+'</td>'+
-      '<td><span class="pill b">'+r.channel+'</span></td><td>'+(r.ai&&r.ai.orderTime||'—')+'</td><td>'+(r.ai&&r.ai.punchTime||'—')+'</td>'+
+      '<td><span class="pill b">'+r.channel+'</span></td>'+
+      '<td>'+(r.sharedCount>1?'<span class="pill a">'+r.sharedCount+' 人</span>':'1 人')+'</td>'+
+      '<td>'+(r.ai&&r.ai.orderTime||'—')+'</td><td>'+(r.ai&&r.ai.punchTime||'—')+'</td>'+
       '<td class="money">'+(r.ai&&r.ai.amount?fmtM(r.ai.amount):'—')+'</td>'+
       '<td><span class="pill '+cls+'">'+txt+'</span></td>'+
       '<td class="money '+(r.status==='PASS_CAPPED'?'cap':'')+'">'+(r.amount>0?fmtM(r.amount)+' 元':'—')+'</td>'+
       '<td style="white-space:normal; max-width:260px;">'+esc(r.reason)+'</td>'+
       '<td style="white-space:normal;">'+esc(r.ali)+'<br>'+esc(r.aliname)+'</td>'+
       '<td><button class="del" onclick="delRec(\''+r.id+'\')">删除</button></td></tr>';
-  }).join('')||'<tr><td colspan="13" class="empty">暂无记录</td></tr>';
+  }).join('')||'<tr><td colspan="14" class="empty">暂无记录</td></tr>';
   const passN=records.filter(r=>r.status.startsWith('PASS')).length;
   document.getElementById('ledger-summary').textContent=records.length?('共 '+records.length+' 条提交，通过 '+passN+' 条，不通过 '+(records.length-passN)+' 条'):'';
 }
@@ -215,8 +218,8 @@ function makeTransfer(){
 }
 
 function exportCSV(){
-  const head='提交时间,姓名,一级部门,二级部门,用餐日期,通道,下单时间,打卡时间,实付金额,判定结果,可报金额,原因说明,支付宝账号,支付宝实名\n';
-  const body=records.map(r=>[r.createdAt.replace('T',' ').slice(0,16),r.name,r.dept1,r.dept2||'',r.date,r.channel,r.ai&&r.ai.orderTime||'',r.ai&&r.ai.punchTime||'',
+  const head='提交时间,姓名,一级部门,二级部门,用餐日期,通道,拼单人数,下单时间,打卡时间,实付金额,判定结果,可报金额,原因说明,支付宝账号,支付宝实名\n';
+  const body=records.map(r=>[r.createdAt.replace('T',' ').slice(0,16),r.name,r.dept1,r.dept2||'',r.date,r.channel,r.sharedCount||1,r.ai&&r.ai.orderTime||'',r.ai&&r.ai.punchTime||'',
     r.ai&&r.ai.amount||'',(ST[r.status]||['—'])[0],r.amount,r.reason.replace(/[,，]/g,'；'),r.ali,r.aliname].join(',')).join('\n');
   const blob=new Blob(['\ufeff'+head+body],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='晚餐报销审核台账.csv'; a.click();

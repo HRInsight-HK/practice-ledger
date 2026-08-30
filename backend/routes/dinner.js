@@ -30,10 +30,15 @@ function judge(form, ai, records) {
   if (ai.punchDate && ai.punchDate !== form.date) {
     return { status: 'FAIL_DATE', channel: '—', amount: 0, reason: '日期不一致：打卡日期(' + ai.punchDate + ')与用餐日期(' + form.date + ')不符' };
   }
+  // 拼单人数（默认 1，即独自下单）
+  const shared = Math.max(1, parseInt(form.sharedCount) || 1);
   const wk = mondayOf(form.date);
-  const dup = (records || []).find(r => r.ai && r.ai.orderNo === ai.orderNo && r.status && r.status.startsWith('PASS'));
-  if (dup) {
-    return { status: 'FAIL_DUP', channel: '—', amount: 0, reason: '订单号重复：该订单已于 ' + dup.date + ' 提交并通过' };
+
+  // 同一人重复提交同一订单号 → 拒绝（不同人拼单放开，受下方订单总额度限制）
+  const selfDup = (records || []).find(r =>
+    r.name === form.name && r.ai && r.ai.orderNo === ai.orderNo && r.status && r.status.startsWith('PASS'));
+  if (selfDup) {
+    return { status: 'FAIL_DUP', channel: '—', amount: 0, reason: '订单号重复：本人已于 ' + selfDup.date + ' 提交过该订单' };
   }
   const om = toMin(ai.orderTime), pm = toMin(ai.punchTime);
   let channel, pass;
@@ -45,42 +50,73 @@ function judge(form, ai, records) {
       reason: '通道B：下单 ' + ai.orderTime + '（< 19:30），打卡 ' + ai.punchTime + ' 早于 20:30，未达加班晚餐条件'
     };
   }
-  let amount = Math.min(Number(ai.amount), CAP_MEAL);
-  const cappedMeal = Number(ai.amount) > CAP_MEAL;
+
+  // 拼单均分：先按「实付 ÷ 拼单人数」计，再套单人 25 元封顶（向下取整，不超发）
+  const perHead = Number(ai.amount) / shared;
+  let amount = Math.floor(Math.min(perHead, CAP_MEAL) * 10) / 10;
+  const cappedMeal = perHead > CAP_MEAL;
+
+  // 订单总额锁：同一订单号已报销合计不得超过实付金额
+  const orderClaimed = (records || [])
+    .filter(r => r.ai && r.ai.orderNo === ai.orderNo && r.status && r.status.startsWith('PASS'))
+    .reduce((s, r) => s + r.amount, 0);
+  const orderRemaining = Math.floor((Number(ai.amount) - orderClaimed) * 10) / 10;
+  let orderCapped = false;
+  if (amount > orderRemaining) { amount = Math.max(0, orderRemaining); orderCapped = true; }
+  if (amount <= 0) {
+    return {
+      status: 'FAIL_ORDERCAP', channel, amount: 0,
+      reason: '该订单额度已领完：实付 ' + fmtM(ai.amount) + ' 元，已报 ' + fmtM(orderClaimed) + ' 元，无剩余可报'
+    };
+  }
+
   const used = (records || [])
     .filter(r => r.name === form.name && r.status && r.status.startsWith('PASS') && mondayOf(r.date) === wk)
     .reduce((s, r) => s + r.amount, 0);
   let weekCapped = false;
   if (used + amount > CAP_WEEK) {
-    amount = Math.max(0, CAP_WEEK - used);
+    amount = Math.max(0, Math.floor((CAP_WEEK - used) * 10) / 10);
     weekCapped = amount > 0;
   }
   if (amount <= 0) {
     return { status: 'FAIL_WEEKCAP', channel, amount: 0, reason: '周封顶已满：本周累计 ' + fmtM(used) + ' 元已达 100 元上限' };
   }
+
   let status = channel === 'A' ? 'PASS_A' : 'PASS_B';
   let reason = channel === 'A'
     ? '通道A：下单 ' + ai.orderTime + ' ≥ 19:30，直接可报'
     : '通道B：下单 ' + ai.orderTime + ' < 19:30，打卡 ' + ai.punchTime + ' ≥ 20:30';
-  if (cappedMeal) reason += '；实付 ' + fmtM(ai.amount) + ' 超 25 元，按单餐封顶报 25 元';
+  if (shared > 1) {
+    reason += '；' + shared + ' 人拼单实付 ' + fmtM(ai.amount) + ' 元，人均 ' + fmtM(perHead) + ' 元';
+  }
+  if (cappedMeal) reason += '；人均超 25 元，按单餐封顶报 25 元';
+  if (orderCapped) {
+    status = 'PASS_CAPPED';
+    reason += '；该订单剩余额度仅 ' + fmtM(orderRemaining) + ' 元，本次按剩余报销';
+  }
   if (weekCapped) {
     status = 'PASS_CAPPED';
     reason += '；本周已累计 ' + fmtM(used) + ' 元，超周封顶，本次仅可报 ' + fmtM(amount) + ' 元';
   }
-  return { status, channel, amount, reason, used };
+  return { status, channel, amount, reason, used, shared, orderClaimed };
 }
 
 // ==================== 员工提交（免登录，同问卷模式） ====================
 router.post('/', async (req, res) => {
-  const { name, dept1, dept2, date, ali, aliname, orderTime, doneTime, orderNo, amount, punchTime, punchDate } = req.body;
+  const { name, dept1, dept2, date, ali, aliname, orderTime, doneTime, orderNo, amount, punchTime, punchDate, sharedCount } = req.body;
 
   if (!name) return res.status(400).json({ error: '请填写姓名' });
   if (!dept1) return res.status(400).json({ error: '请填写一级部门' });
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: '请选择用餐日期' });
   if (!ali) return res.status(400).json({ error: '请填写支付宝账号（用于转账）' });
   if (!aliname) return res.status(400).json({ error: '请填写支付宝实名姓名（填真实姓名，勿填小名）' });
+  const shared = Math.max(1, parseInt(sharedCount) || 1);
+  if (shared > 20) return res.status(400).json({ error: '拼单人数不合理，请如实填写' });
 
-  const form = { name: String(name).trim(), dept1: String(dept1).trim(), dept2: String(dept2 || '').trim(), date, ali: String(ali).trim(), aliname: String(aliname).trim() };
+  const form = {
+    name: String(name).trim(), dept1: String(dept1).trim(), dept2: String(dept2 || '').trim(),
+    date, ali: String(ali).trim(), aliname: String(aliname).trim(), sharedCount: shared
+  };
   const ai = {
     orderTime: (orderTime || '').trim(), doneTime: (doneTime || '').trim(),
     orderNo: (orderNo || '').trim(), amount: Number(amount) || 0,
@@ -101,6 +137,8 @@ router.post('/', async (req, res) => {
     amount: result.amount,
     reason: result.reason,
     weekUsed: result.used || 0,
+    sharedCount: shared,
+    orderClaimed: (result.orderClaimed || 0) + (result.amount > 0 ? result.amount : 0),
     createdAt: new Date().toISOString()
   };
   data.dinnerRecords.push(entry);
@@ -111,7 +149,7 @@ router.post('/', async (req, res) => {
     success: true, id: entry.id, pass,
     status: result.status, channel: result.channel,
     amount: result.amount, reason: result.reason,
-    weekUsed: result.used || 0
+    weekUsed: result.used || 0, sharedCount: shared
   });
 });
 
