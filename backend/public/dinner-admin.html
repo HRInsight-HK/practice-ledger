@@ -46,6 +46,10 @@
   .scroll{overflow-x:auto;}
   .del{color:var(--red); cursor:pointer; font-size:12px; text-decoration:underline; background:none; border:none;}
   .empty{text-align:center; color:var(--sub); padding:24px 0;}
+  .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:100;}
+  .modal{background:#fff;border-radius:var(--r);padding:18px;max-width:520px;width:92%;}
+  .modal h3{margin-bottom:10px;}
+  .receipt-link{font-size:11px;color:var(--blue);margin-left:4px;text-decoration:underline;}
 </style>
 </head>
 <body>
@@ -78,12 +82,17 @@
         <div class="toolbar">
           <input id="flt-name" placeholder="按姓名筛选" oninput="renderLedger()">
           <select id="flt-status" onchange="renderLedger()"><option value="">全部状态</option><option value="PASS">仅通过</option><option value="FAIL">仅不通过</option></select>
+          <select id="flt-paid" onchange="renderLedger()" style="width:auto;">
+            <option value="">全部打款</option><option value="UNPAID">仅未打款</option><option value="PAID">仅已打款</option>
+          </select>
           <span style="flex:1"></span>
+          <button class="btn small ghost" id="btn-batch-pay" onclick="openBatchPay()" disabled>💰 批量打款（0）</button>
           <button class="btn small ghost" onclick="loadRecords()">↻ 刷新</button>
           <button class="btn small ghost" onclick="exportCSV()">⬇ 导出 CSV</button>
         </div>
         <div class="scroll"><table id="tbl"><thead><tr>
-          <th>提交时间</th><th>姓名</th><th>一级部门</th><th>用餐日期</th><th>通道</th><th>拼单</th><th>下单</th><th>打卡</th><th>实付</th><th>判定</th><th>可报</th><th>原因 / 说明</th><th>支付宝</th><th></th>
+          <th><input type="checkbox" id="check-all" onchange="toggleAll(this.checked)"></th>
+          <th>提交时间</th><th>姓名</th><th>一级部门</th><th>用餐日期</th><th>通道</th><th>拼单</th><th>下单</th><th>打卡</th><th>实付</th><th>判定</th><th>可报</th><th>原因 / 说明</th><th>支付宝</th><th>打款</th><th></th>
         </tr></thead><tbody></tbody></table></div>
         <div class="summary" id="ledger-summary"></div>
       </div>
@@ -160,11 +169,16 @@ function weekLabel(m){ const a=new Date(m+'T00:00:00'),b=new Date(m+'T00:00:00')
 function fmtM(n){ return (Math.round(n*10)/10).toFixed(1); }
 
 function renderLedger(){
-  const fn=document.getElementById('flt-name').value.trim(), fs=document.getElementById('flt-status').value;
-  const list=records.filter(r=>(!fn||r.name.includes(fn))&&(!fs||(fs==='PASS'?r.status.startsWith('PASS'):r.status.startsWith('FAIL'))));
+  const fn=document.getElementById('flt-name').value.trim(), fs=document.getElementById('flt-status').value, fp=document.getElementById('flt-paid').value;
+  const list=records.filter(r=>(!fn||r.name.includes(fn))&&(!fs||(fs==='PASS'?r.status.startsWith('PASS'):r.status.startsWith('FAIL')))&&(!fp||(fp==='PAID'?r.paid:!r.paid)));
   document.querySelector('#tbl tbody').innerHTML=list.map(r=>{
     const [txt,cls]=ST[r.status]||['—','b'];
-    return '<tr><td>'+r.createdAt.replace('T',' ').slice(0,16)+'</td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.dept1)+(r.dept2?' / '+esc(r.dept2):'')+'</td><td>'+r.date+'</td>'+
+    const canCheck=r.status&&r.status.startsWith('PASS')&&!r.paid;
+    const ck=canCheck?'<input type="checkbox" class="row-check" data-id="'+r.id+'" data-name="'+esc(r.name)+'" data-amount="'+r.amount+'" onchange="onCheckChange()">':'<span style="color:var(--sub)">—</span>';
+    const paidCell=r.paid
+      ? '<span class="pill g" title="'+(r.paidAt||'')+'">已打款</span> '+(r.paidReceipt&&r.paidReceipt.url?'<a href="'+esc(r.paidReceipt.url)+'" target="_blank" class="receipt-link">凭证</a>':'<br><span style="font-size:11px;color:var(--sub)">'+(r.paidAt||'').slice(0,16)+(r.paidNote?' · '+esc(r.paidNote):'')+'</span>')
+      : '<span class="pill b">未打款</span>';
+    return '<tr><td>'+ck+'</td><td>'+r.createdAt.replace('T',' ').slice(0,16)+'</td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.dept1)+(r.dept2?' / '+esc(r.dept2):'')+'</td><td>'+r.date+'</td>'+
       '<td><span class="pill b">'+r.channel+'</span></td>'+
       '<td>'+(r.sharedCount>1?'<span class="pill a">'+r.sharedCount+' 人</span>':'1 人')+'</td>'+
       '<td>'+(r.ai&&r.ai.orderTime||'—')+'</td><td>'+(r.ai&&r.ai.punchTime||'—')+'</td>'+
@@ -173,15 +187,96 @@ function renderLedger(){
       '<td class="money '+(r.status==='PASS_CAPPED'?'cap':'')+'">'+(r.amount>0?fmtM(r.amount)+' 元':'—')+'</td>'+
       '<td style="white-space:normal; max-width:260px;">'+esc(r.reason)+'</td>'+
       '<td style="white-space:normal;">'+esc(r.ali)+'<br>'+esc(r.aliname)+'</td>'+
-      '<td><button class="del" onclick="delRec(\''+r.id+'\')">删除</button></td></tr>';
-  }).join('')||'<tr><td colspan="14" class="empty">暂无记录</td></tr>';
+      '<td style="white-space:normal; min-width:140px;">'+paidCell+'</td>'+
+      '<td style="white-space:nowrap;"><button class="del" onclick="delRec(\''+r.id+'\')">删除</button>'+(r.paid?' <button class="del" style="text-decoration:underline;color:var(--sub);border-color:transparent;" onclick="unpayRec(\''+r.id+'\')">撤回</button>':'')+'</td></tr>';
+  }).join('')||'<tr><td colspan="15" class="empty">暂无记录</td></tr>';
   const passN=records.filter(r=>r.status.startsWith('PASS')).length;
-  document.getElementById('ledger-summary').textContent=records.length?('共 '+records.length+' 条提交，通过 '+passN+' 条，不通过 '+(records.length-passN)+' 条'):'';
+  const paidN=records.filter(r=>r.paid).length;
+  const passPaid=records.filter(r=>r.status.startsWith('PASS')&&r.paid).length;
+  const unpaidAmt=records.filter(r=>r.status.startsWith('PASS')&&!r.paid).reduce((s,r)=>s+r.amount,0);
+  const paidAmt=records.filter(r=>r.status.startsWith('PASS')&&r.paid).reduce((s,r)\n=>s+r.amount,0);
+  document.getElementById('ledger-summary').innerHTML=records.length?(
+    `共 ${records.length} 条 · 通过 ${passN} · 已打款 ${passPaid}/${passN}（${fmtM(paidAmt)} 元） · 待打款 ${fmtM(unpaidAmt)} 元`):'';
+  onCheckChange();
 }
+
+function onCheckChange(){
+  const cks=[...document.querySelectorAll('.row-check:checked')];
+  const btn=document.getElementById('btn-batch-pay');
+  btn.disabled=cks.length===0;
+  // 按姓名分组统计（提示用户一目了然）
+  const byName={};
+  cks.forEach(c=>{
+    const n=c.dataset.name, a=parseFloat(c.dataset.amount||0);
+    byName[n]=(byName[n]||0)+a;
+  });
+  const summary=Object.keys(byName).length===0?'':(' · '+Object.entries(byName).map(([n,a])=>`${n} ${fmtM(a)}`).join(' / '));
+  btn.textContent=`💰 批量打款（${cks.length}${summary}）`;
+}
+function toggleAll(on){ document.querySelectorAll('.row-check').forEach(c=>{ c.checked=on; }); onCheckChange(); }
 
 function delRec(id){
   if(!confirm('确认删除这条提交记录？删除后其周累计额度也会释放。')) return;
   api('/records/'+id,{method:'DELETE'}).then(({ok,j})=>{ if(ok) loadRecords(); else alert(j.error||'删除失败'); });
+}
+function unpayRec(id){
+  if(!confirm('撤回这条的打款标记？')) return;
+  api('/records/'+id+'/unpay',{method:'POST'}).then(({ok,j})=>{ if(ok) loadRecords(); else alert(j.error||'撤回失败'); });
+}
+
+// ==================== 批量打款模态 ====================
+function openBatchPay(){
+  const cks=[...document.querySelectorAll('.row-check:checked')];
+  if(!cks.length) return;
+  const byName={};
+  cks.forEach(c=>{ const n=c.dataset.name,a=parseFloat(c.dataset.amount||0); (byName[n]=byName[n]||{count:0,amount:0}).count++; byName[n].amount+=a; });
+  const rows=Object.entries(byName).map(([n,v])=>`<tr><td>${esc(n)}</td><td>${v.count}</td><td class="money">${fmtM(v.amount)} 元</td></tr>`).join('');
+  const total=cks.reduce((s,c)=>s+parseFloat(c.dataset.amount||0),0);
+  const ids=cks.map(c=>c.dataset.id).join(',');
+  const html=`
+    <div class="modal-mask" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <h3>💰 批量打款（${cks.length} 条 · ${fmtM(total)} 元）</h3>
+        <p style="font-size:13px;color:var(--sub);margin-bottom:10px;">一次上传一张转账凭证，对应一笔支付宝转账；同一批次记录共享批次号便于追溯。</p>
+        <table><thead><tr><th>姓名</th><th>笔数</th><th>合计金额</th></tr></thead><tbody>${rows}</tbody></table>
+        <div style="margin-top:12px;">
+          <label>打款凭证截图（PNG/JPG/WEBP，可选）</label>
+          <input type="file" id="pay-receipt" accept="image/*">
+        </div>
+        <div style="margin-top:10px;">
+          <label>备注（可选，如"周五周结 8 月第 3 周"）</label>
+          <input id="pay-note" placeholder="例如：支付宝转账 2026-08-29 周五">
+        </div>
+        <div style="margin-top:14px;text-align:right;">
+          <button class="btn small ghost" onclick="closeModal()">取消</button>
+          <button class="btn" onclick="submitBatchPay('${ids}')">确认打款</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+function closeModal(){ const m=document.querySelector('.modal-mask'); if(m) m.remove(); }
+function submitBatchPay(ids){
+  const fd=new FormData();
+  ids.split(',').forEach(id=>fd.append('ids',id));
+  // 后端期望 ids 是 csv（一次性字段）；但 multipart 多个同名会被解析为数组。改为 json ids：
+  const file=document.getElementById('pay-receipt').files[0];
+  if(file) fd.append('receipt',file);
+  const note=document.getElementById('pay-note').value.trim();
+  if(note) fd.append('note',note);
+  // 把 ids 合并为 csv，覆写 fd 里的同名多值
+  fd.delete('ids');
+  fd.append('ids',ids);
+  const token=localStorage.getItem(TOKEN_KEY);
+  fetch('/api/dinner/records/batch-pay',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd})
+    .then(r=>r.json().then(j=>({ok:r.ok,j})))
+    .then(({ok,j})=>{
+      if(!ok){ alert(j.error||'打款失败'); return; }
+      closeModal();
+      alert('已打款 '+j.paidCount+' 条，合计 '+fmtM(j.totalAmount)+' 元'+(j.skipped&&j.skipped.length?'；跳过 '+j.skipped.length+' 条（'+j.skipped.map(s=>s.reason).join(' / ')+'）':''));
+      loadRecords();
+    })
+    .catch(()=>alert('网络错误'));
 }
 
 function renderWeekly(){
@@ -191,29 +286,40 @@ function renderWeekly(){
     sel.innerHTML=weeks.map(w=>'<option value="'+w+'">'+weekLabel(w)+'</option>').join('');
   }
   const wk=sel.value||weeks[0]; if(!wk) return;
-  const passes=records.filter(r=>r.status.startsWith('PASS')&&mondayOf(r.date)===wk);
+const passes=records.filter(r=>r.status.startsWith('PASS')&&mondayOf(r.date)===wk);
   const byName={};
   passes.forEach(r=>{
-    if(!byName[r.name]) byName[r.name]={name:r.name,ali:r.ali,aliname:r.aliname,n:0,sum:0};
+    if(!byName[r.name]) byName[r.name]={name:r.name,ali:r.ali,aliname:r.aliname,n:0,sum:0,paid:0,paidSum:0};
     byName[r.name].n++; byName[r.name].sum+=r.amount;
+    if(r.paid){ byName[r.name].paid++; byName[r.name].paidSum+=r.amount; }
   });
   const rows=Object.values(byName);
-  document.querySelector('#tbl-weekly tbody').innerHTML=rows.map(x=>
-    '<tr><td><b>'+esc(x.name)+'</b></td><td>'+esc(x.ali)+'</td><td>'+esc(x.aliname)+'</td><td>'+x.n+'</td><td class="money">'+fmtM(x.sum)+' 元</td>'+
-    '<td class="money'+(x.sum>=100?' cap':'')+'">'+fmtM(Math.min(x.sum,100))+' 元</td></tr>'
-  ).join('')||'<tr><td colspan="6" class="empty">该周无通过记录</td></tr>';
+  document.querySelector('#tbl-weekly tbody').innerHTML=rows.map(x=>{
+    const transfer=Math.min(x.sum,100);
+    const payTag=x.paid===x.n?' <span class="pill g">已打款</span>':(x.paid>0?' <span class="pill a">'+x.paid+'/'+x.n+' 已打款</span>':' <span class="pill b">未打款</span>');
+    return '<tr><td><b>'+esc(x.name)+payTag+'</b></td><td>'+esc(x.ali)+'</td><td>'+esc(x.aliname)+'</td><td>'+x.n+'</td><td class="money">'+fmtM(x.sum)+' 元</td>'+
+      '<td class="money'+(x.sum>=100?' cap':'')+'">'+fmtM(transfer)+' 元</td></tr>';
+  }).join('')||'<tr><td colspan="6" class="empty">该周无通过记录</td></tr>';
   const total=rows.reduce((s,x)=>s+Math.min(x.sum,100),0);
-  document.getElementById('weekly-summary').textContent=rows.length?('本周共 '+rows.length+' 人待转账，合计 '+fmtM(total)+' 元'):'';
-  return {wk,rows,total};
+  const paidTotal=rows.reduce((s,x)=>s+Math.min(x.paidSum,100),0);
+  const unpaidTotal=total-paidTotal;
+  document.getElementById('weekly-summary').innerHTML=rows.length?(
+    `本周共 ${rows.length} 人 · 合计 ${fmtM(total)} 元 · 已打款 ${fmtM(paidTotal)} 元（${total?Math.round(paidTotal/total*100):0}%） · 待打款 ${fmtM(unpaidTotal)} 元`):'';
+  return {wk,rows,total,paidTotal,unpaidTotal};
 }
 
 function makeTransfer(){
-  const {wk,rows,total}=renderWeekly()||{};
+  const r=renderWeekly()||{};
+  const wk=r.wk,rows=r.rows,total=r.total;
   const box=document.getElementById('transfer');
   if(!rows||!rows.length){ box.className='transfer show'; box.textContent='该周无通过记录，无需转账。'; return; }
-  const lines=rows.map(x=>x.name+'（'+x.aliname+'　'+x.ali+'）　'+fmtM(Math.min(x.sum,100))+' 元');
+  const lines=rows.map(x=>{
+    const transfer=Math.min(x.sum,100);
+    const tag=x.paid===x.n?'✅':(x.paid>0?'⚠️ '+x.paid+'/'+x.n:'❌ 待打款');
+    return x.name+'（'+x.aliname+'　'+x.ali+'）　'+fmtM(transfer)+' 元　'+tag;
+  });
   box.className='transfer show';
-  box.textContent='【加班晚餐报销周结算】'+weekLabel(wk)+'\n'+lines.join('\n')+'\n合计：'+fmtM(total)+' 元\n\n执行：支付宝逐笔转账，备注「加班晚餐报销」。';
+  box.textContent='【加班晚餐周结算】'+weekLabel(wk)+'\n'+lines.join('\n')+'\n合计：'+fmtM(total)+' 元（已打款 '+fmtM(r.paidTotal||0)+' 元，待打款 '+fmtM(r.unpaidTotal||0)+' 元）\n\n执行：到后台「审核台账」勾选某人未打款记录 →「批量打款」→ 上传转账截图并提交。';
   if(navigator.clipboard){ navigator.clipboard.writeText(box.textContent).then(()=>{ box.textContent+='\n（已复制到剪贴板）'; }); }
 }
 

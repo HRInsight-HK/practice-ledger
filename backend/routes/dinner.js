@@ -1,8 +1,33 @@
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const crypto = require('crypto');
 const { getData, saveData } = require('../lib/db');
 const { authMiddleware, requireRole } = require('../lib/auth');
 
 const router = express.Router();
+
+// ==================== 凭证上传（multer）====================
+// 凭证图片保存到 backend/uploads/dinner-receipts/，文件名随机
+const RECEIPTS_DIR = path.join(__dirname, '..', 'uploads', 'dinner-receipts');
+if (!fs.existsSync(RECEIPTS_DIR)) fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
+const receiptStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, RECEIPTS_DIR),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase() || '.png';
+    const safeExt = ['.png', '.jpg', '.jpeg', '.webp'].includes(ext) ? ext : '.png';
+    cb(null, 'rc_' + crypto.randomBytes(8).toString('hex') + safeExt);
+  }
+});
+const receiptUpload = multer({
+  storage: receiptStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (/^image\/(png|jpe?g|webp)$/i.test(file.mimetype)) cb(null, true);
+    else cb(new Error('仅支持 PNG/JPG/WEBP 图片'));
+  }
+});
 
 // ==================== 判定引擎（与方案规则一致） ====================
 const CUT_A = 19 * 60 + 30; // 19:30 通道A线：下单 ≥ 19:30 直接可报
@@ -171,6 +196,79 @@ router.delete('/records/:id', authMiddleware, requireRole('admin', 'hr'), async 
   const removed = data.dinnerRecords.splice(idx, 1)[0];
   await saveData();
   res.json({ success: true, removedId: removed.id });
+});
+
+// ==================== 打款：单条 ====================
+// 管理员上传打款凭证（图片，可选 note 备注），标记记录为已打款
+router.post('/records/:id/pay', authMiddleware, requireRole('admin', 'hr'),
+  receiptUpload.single('receipt'), async (req, res) => {
+    const data = getData();
+    const r = (data.dinnerRecords || []).find(x => x.id === req.params.id);
+    if (!r) return res.status(404).json({ error: '记录不存在' });
+    if (!r.status || !r.status.startsWith('PASS')) return res.status(400).json({ error: '仅通过的记录可标记打款' });
+    const note = (req.body && req.body.note || '').toString().trim();
+    r.paid = true;
+    r.paidAt = new Date().toISOString();
+    r.paidBatchId = r.paidBatchId || ('B' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex'));
+    r.paidReceipt = {
+      type: req.file ? 'image' : (note ? 'note' : null),
+      url: req.file ? ('/uploads/dinner-receipts/' + req.file.filename) : null,
+      note: note || ''
+    };
+    r.paidBy = req.user.username;
+    await saveData();
+    res.json({ success: true, id: r.id, paid: true, paidAt: r.paidAt, paidBatchId: r.paidBatchId });
+  }
+);
+
+// ==================== 打款：批量（一次性给一人多笔） ====================
+// ids 用逗号分隔；上传一张凭证对应一次支付宝转账；同一批次记录共享 paidBatchId
+router.post('/records/batch-pay', authMiddleware, requireRole('admin', 'hr'),
+  receiptUpload.single('receipt'), async (req, res) => {
+    const idsRaw = (req.body && req.body.ids || '').toString();
+    const note = (req.body && req.body.note || '').toString().trim();
+    const ids = idsRaw.split(',').map(s => s.trim()).filter(Boolean);
+    if (!ids.length) return res.status(400).json({ error: '请选择要打款的记录（ids 为空）' });
+    const data = getData();
+    const batchId = 'B' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex');
+    const now = new Date().toISOString();
+    const updated = [];
+    const skipped = [];
+    for (const id of ids) {
+      const r = (data.dinnerRecords || []).find(x => x.id === id);
+      if (!r) { skipped.push({ id, reason: '记录不存在' }); continue; }
+      if (!r.status || !r.status.startsWith('PASS')) { skipped.push({ id, reason: '非通过记录' }); continue; }
+      r.paid = true;
+      r.paidAt = now;
+      r.paidBatchId = batchId;
+      r.paidReceipt = {
+        type: req.file ? 'image' : (note ? 'note' : null),
+        url: req.file ? ('/uploads/dinner-receipts/' + req.file.filename) : null,
+        note: note || ''
+      };
+      r.paidBy = req.user.username;
+      updated.push({ id: r.id, amount: r.amount });
+    }
+    await saveData();
+    res.json({
+      success: true, batchId, paidCount: updated.length,
+      totalAmount: updated.reduce((s, x) => s + x.amount, 0),
+      skipped
+    });
+  }
+);
+
+// ==================== 取消打款标记（误点可撤回）====================
+router.post('/records/:id/unpay', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
+  const data = getData();
+  const r = (data.dinnerRecords || []).find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: '记录不存在' });
+  r.paid = false;
+  r.paidAt = null;
+  r.paidBy = null;
+  // 不删 paidBatchId / paidReceipt，留作历史
+  await saveData();
+  res.json({ success: true, id: r.id, paid: false });
 });
 
 module.exports = router;
