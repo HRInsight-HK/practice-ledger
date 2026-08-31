@@ -87,17 +87,17 @@
   </div>
 
   <div class="card">
-    <h3>③ AI 识别结果</h3>
+    <h3>③ AI 识别结果（自动提取，只需核对）</h3>
     <div class="ai-box">
-      <button class="btn small" id="btn-ai" onclick="simulateAI()">🤖 开始 AI 识别</button>
-      <span id="ai-status" style="font-size:12px; color:var(--sub); margin-left:8px;">上传截图后点击识别</span>
-      <div class="grid2" style="margin-top:10px;">
-        <div><label>外卖下单时间</label><input id="ai-order" placeholder="19:42"></div>
-        <div><label>订单完成时间</label><input id="ai-done" placeholder="20:05"></div>
-        <div><label>订单号</label><input id="ai-no" placeholder="从截图自动提取"></div>
-        <div><label>实付金额（元）</label><input id="ai-amount" type="number" step="0.1" placeholder="23.5"></div>
-        <div><label>下班打卡时间</label><input id="ai-punch" placeholder="21:10"></div>
-        <div><label>打卡日期</label><input type="date" id="ai-punchdate"></div>
+      <div id="ai-status" style="font-size:12px; color:var(--sub);">上传上面两张截图后，系统会自动识别并填入下方字段</div>
+      <div id="ai-badge" style="margin:8px 0;"></div>
+      <div class="grid2" style="margin-top:8px;">
+        <div><label>外卖下单时间</label><input id="ai-order" placeholder="自动识别" readonly></div>
+        <div><label>订单完成时间</label><input id="ai-done" placeholder="自动识别" readonly></div>
+        <div><label>订单号</label><input id="ai-no" placeholder="自动识别" readonly></div>
+        <div><label>实付金额（元）</label><input id="ai-amount" type="number" step="0.1" placeholder="自动识别" readonly></div>
+        <div><label>下班打卡时间</label><input id="ai-punch" placeholder="自动识别" readonly></div>
+        <div><label>打卡日期</label><input type="date" id="ai-punchdate" readonly></div>
         <div><label>本单拼单人数</label><select id="f-shared">
           <option value="1">1 人（独自下单）</option>
           <option value="2">2 人拼单</option>
@@ -107,8 +107,8 @@
           <option value="6">6 人拼单</option>
         </select></div>
       </div>
-      <div class="ai-note">试用版：识别字段由员工核对填写（或点上方按钮自动模拟）；正式版由视觉大模型自动从截图提取，员工无需填写。</div>
-      <div class="ai-note">👥 多人拼单：每人各传各的打卡截图、各自提交一次本表单，都填同一订单号、选相同拼单人数。每人可报 = min(实付 ÷ 拼单人数, 25)，同一订单合计报销不超过实付金额。</div>
+      <div class="ai-note">🔒 下单时间、订单号、实付金额、打卡时间均由 AI 从截图自动提取，<b>不可手工填写</b>；识别有误请重新上传更清晰的截图。</div>
+      <div class="ai-note">👥 多人拼单：每人各传各的打卡截图、各自提交一次本表单，都传同一张外卖订单截图、选相同拼单人数。每人可报 = min(实付 ÷ 拼单人数, 25)，同一订单合计报销不超过实付金额。</div>
     </div>
   </div>
 
@@ -133,40 +133,80 @@ const API = location.origin.startsWith('http') && !location.origin.includes('loc
   ? location.origin + '/api/dinner' : '/api/dinner';
 
 function toMin(t){ if(!t||!/^\d{1,2}:\d{2}$/.test(t)) return null; const [h,m]=t.split(':').map(Number); return h*60+m; }
-function addMin(t,n){ let m=toMin(t)+n; return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
-function randTime(h1,m1,h2,m2){ const a=h1*60+m1,b=h2*60+m2,t=a+Math.floor(Math.random()*(b-a));
-  return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0'); }
 
 document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
 
+// 识别状态
+const RECOGNIZED = { order:false, punch:false };
+let VISION_OK = null;
+
+// 探测视觉服务是否可用
+fetch(API + '/recognize/status').then(r=>r.json()).then(j=>{
+  VISION_OK = !!j.configured;
+  if(!VISION_OK){
+    document.getElementById('ai-badge').innerHTML =
+      '<div style="background:var(--red-bg);border:1px solid #fecaca;color:var(--red);border-radius:8px;padding:8px 10px;font-size:12.5px;">'
+      + '⚠️ 视觉识别服务未配置，当前无法自动提取截图字段。请联系管理员配置后使用。</div>';
+  }
+}).catch(()=>{ VISION_OK = false; });
+
+// 选择截图 → 自动识别
 ['file-order','file-punch'].forEach(id=>{
   document.getElementById(id).onchange = e=>{
     const f=e.target.files[0]; if(!f) return;
+    const kind = id==='file-order' ? 'order' : 'punch';
     const img=document.getElementById(id==='file-order'?'prev-order':'prev-punch');
     const rd=new FileReader();
     rd.onload=()=>{ img.src=rd.result; img.style.display='block'; };
     rd.readAsDataURL(f);
+    recognize(kind, f);
   };
 });
 
-function simulateAI(){
-  const btn=document.getElementById('btn-ai'), st=document.getElementById('ai-status');
-  const date=document.getElementById('f-date').value||new Date().toISOString().slice(0,10);
-  btn.disabled=true;
-  st.innerHTML='<span class="loading"></span>识别中…';
-  setTimeout(()=>{
-    const r=Math.random();
-    const orderTime = r<0.45 ? randTime(19,35,21,0) : randTime(18,50,19,25);
-    const punchTime = randTime(20,0,21,35);
-    document.getElementById('ai-order').value=orderTime;
-    document.getElementById('ai-done').value=addMin(orderTime,20+Math.floor(Math.random()*25));
-    document.getElementById('ai-no').value='MT'+date.replace(/-/g,'')+Math.random().toString(36).slice(2,7).toUpperCase();
-    document.getElementById('ai-amount').value=(15+Math.random()*20).toFixed(1);
-    document.getElementById('ai-punch').value=punchTime;
-    document.getElementById('ai-punchdate').value=date;
-    btn.disabled=false; btn.textContent='🔄 重新识别';
-    st.textContent='识别完成 ✅ 请核对，可手动修正';
-  },900);
+function recognize(kind, file){
+  const st=document.getElementById('ai-status');
+  RECOGNIZED[kind]=false;
+  st.innerHTML='<span class="loading"></span>' + (kind==='order' ? '正在识别外卖订单截图…' : '正在识别打卡截图…');
+  const fd=new FormData();
+  fd.append('image', file);
+  fd.append('kind', kind);
+  fetch(API + '/recognize', { method:'POST', body:fd })
+    .then(r=>r.json().then(j=>({ok:r.ok, j})))
+    .then(({ok,j})=>{
+      if(!ok){
+        st.innerHTML='<span style="color:var(--red)">✗ '+(j.error||'识别失败')+'（'+(j.code||'')+'）</span>';
+        if(kind==='order'){ ['ai-order','ai-done','ai-no','ai-amount'].forEach(i=>document.getElementById(i).value=''); }
+        else { ['ai-punch','ai-punchdate'].forEach(i=>document.getElementById(i).value=''); }
+        return;
+      }
+      const f=j.fields||{};
+      if(kind==='order'){
+        document.getElementById('ai-order').value=f.orderTime||'';
+        document.getElementById('ai-done').value=f.doneTime||'';
+        document.getElementById('ai-no').value=f.orderNo||'';
+        document.getElementById('ai-amount').value=(f.amount==null?'':f.amount);
+        RECOGNIZED.order=true;
+      }else{
+        document.getElementById('ai-punch').value=f.punchTime||'';
+        document.getElementById('ai-punchdate').value=f.punchDate||'';
+        RECOGNIZED.punch=true;
+      }
+      const conf=f.confidence==null?'':'（置信度 '+f.confidence+'%）';
+      st.innerHTML='<span style="color:var(--green)">✓ 识别完成'+conf+'</span>';
+      updateBadge();
+    })
+    .catch(()=>{ st.innerHTML='<span style="color:var(--red)">✗ 网络错误，识别失败</span>'; });
+}
+
+function updateBadge(){
+  const el=document.getElementById('ai-badge');
+  if(VISION_OK===false) return;
+  if(RECOGNIZED.order && RECOGNIZED.punch){
+    el.innerHTML='<div style="background:var(--green-bg);border:1px solid #a7f3d0;color:var(--green);border-radius:8px;padding:8px 10px;font-size:12.5px;">✓ 两张截图均已识别，请核对下方字段后提交</div>';
+  }else{
+    el.innerHTML='<div style="background:var(--amber-bg);border:1px solid #fde68a;color:#92400e;border-radius:8px;padding:8px 10px;font-size:12.5px;">'
+      + (RECOGNIZED.punch?'':' 打卡截图') + '</div>';
+  }
 }
 
 function submitForm(){
@@ -180,7 +220,15 @@ function submitForm(){
   err.className='err';
   if(!form.name||!form.dept1||!form.date){ err.textContent='请填写姓名、一级部门、用餐日期'; err.className='err show'; return; }
   if(!form.ali||!form.aliname){ err.textContent='请填写支付宝账号与实名姓名（用于转账）'; err.className='err show'; return; }
-  if(!form.orderTime||!form.punchTime||!form.orderNo||!(Number(form.amount)>0)){ err.textContent='请先完成 AI 识别（或手动填写下单时间、打卡时间、订单号、实付金额）'; err.className='err show'; return; }
+  if(!RECOGNIZED.order||!RECOGNIZED.punch){
+    err.textContent='请先上传两张截图并完成 AI 识别（下单时间、订单号、金额、打卡时间由系统自动提取，不可手工填写）';
+    err.className='err show'; return;
+  }
+  if(!form.orderTime||!form.punchTime||!form.orderNo||!(Number(form.amount)>0)){ err.textContent='识别结果不完整，请重新上传更清晰的截图'; err.className='err show'; return; }
+  if(form.punchDate && form.punchDate!==form.date){
+    err.textContent='打卡日期（'+form.punchDate+'）与用餐日期（'+form.date+'）不一致，请核对后重新提交';
+    err.className='err show'; return;
+  }
 
   const btn=document.getElementById('btn-submit');
   btn.disabled=true; btn.textContent='审核中…';

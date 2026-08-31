@@ -5,8 +5,54 @@ const multer = require('multer');
 const crypto = require('crypto');
 const { getData, saveData } = require('../lib/db');
 const { authMiddleware, requireRole } = require('../lib/auth');
+const vision = require('../lib/vision');
 
 const router = express.Router();
+
+// ==================== 截图识别（免登录，员工上传即识别）====================
+// 内存暂存图片，识别后不落盘（只返回字段），避免敏感截图堆积
+const shotUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (/^image\/(png|jpe?g|webp)$/i.test(file.mimetype)) cb(null, true);
+    else cb(new Error('仅支持 PNG/JPG/WEBP 截图'));
+  }
+});
+
+router.post('/recognize', (req, res, next) => {
+  shotUpload.single('image')(req, res, (err) => {
+    if (err) {
+      const msg = /LIMIT_FILE_SIZE/.test(err.code || '') ? '截图超过 8MB，请压缩后重试' : (err.message || '图片上传失败');
+      return res.status(400).json({ error: msg, code: 'UPLOAD_ERROR' });
+    }
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: '请先选择截图' });
+    const kind = req.body && req.body.kind === 'punch' ? 'punch' : 'order';
+    const result = await vision.recognize(req.file.buffer, kind);
+    res.json({
+      success: true, kind,
+      fields: result,
+      configured: true
+    });
+  } catch (e) {
+    const code = e.code || 'VISION_ERROR';
+    const status = code === 'NO_VISION_KEY' ? 503 : (code === 'VISION_INCOMPLETE' ? 422 : 500);
+    res.status(status).json({
+      error: e.message || '识别失败',
+      code,
+      configured: vision.configured()
+    });
+  }
+});
+
+// 前端探测：视觉服务是否已配置
+router.get('/recognize/status', (req, res) => {
+  res.json({ configured: vision.configured(), model: process.env.VISION_MODEL || 'gpt-4o-mini' });
+});
 
 // ==================== 凭证上传（multer）====================
 // 凭证图片保存到 backend/uploads/dinner-receipts/，文件名随机
