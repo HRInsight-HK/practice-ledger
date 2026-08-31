@@ -28,13 +28,11 @@
   .btn.warn{background:#fff; color:var(--red); border:1px solid var(--red);}
   .btn.green{background:var(--green); border:none; color:#fff;}
   .btn.small{padding:5px 12px; font-size:12px; font-weight:500;}
-  table{width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; background:#fff;}
+  table{width:100%; border-collapse:collapse; font-size:12.5px; background:#fff;}
   th{background:#f9fafb; text-align:left; padding:7px 9px; font-size:11.5px; color:var(--sub); border-bottom:1px solid var(--line); white-space:nowrap;}
   td{padding:7px 9px; border-bottom:1px solid #f1f2f4; white-space:nowrap;}
-  /* 操作列固定在右侧，避免被横向滚动条截到看不到删除按钮 */
+  /* 操作列已拆出表格，渲染到屏幕右侧固定浮窗（避免被横向滚动条截到看不到删除按钮） */
   #tbl{ min-width: 1180px; position: relative; table-layout: auto; }
-  #tbl td:last-child, #tbl th:last-child { position: sticky; right: 0; background: #fff; box-shadow: -2px 0 6px rgba(0,0,0,.08); z-index: 2; min-width: 110px; }
-  #tbl thead th:last-child { background: #f9fafb; }
   .pill{display:inline-block; padding:1px 9px; border-radius:20px; font-size:11.5px; font-weight:600;}
   .pill.g{background:var(--green-bg); color:var(--green);}
   .pill.r{background:var(--red-bg); color:var(--red);}
@@ -118,10 +116,16 @@
           <button class="btn small ghost" onclick="loadRecords()">↻ 刷新</button>
           <button class="btn small ghost" onclick="exportCSV()">⬇ 导出 CSV</button>
         </div>
-        <div class="scroll"><table id="tbl"><thead><tr>
-          <th><input type="checkbox" id="check-all" onchange="toggleAll(this.checked)"></th>
-          <th>提交时间</th><th>姓名</th><th>一级部门</th><th>用餐日期</th><th>核验</th><th>证明图</th><th>员工填写</th><th>识别结果</th><th>判定</th><th>可报</th><th>原因 / 说明</th><th>支付宝</th><th>打款</th><th>操作</th>
-        </tr></thead><tbody></tbody></table></div>
+        <div style="position:relative;">
+          <div class="scroll"><table id="tbl"><thead><tr>
+            <th><input type="checkbox" id="check-all" onchange="toggleAll(this.checked)"></th>
+            <th>提交时间</th><th>姓名</th><th>一级部门</th><th>用餐日期</th><th>核验</th><th>证明图</th><th>员工填写</th><th>识别结果</th><th>判定</th><th>可报</th><th>原因 / 说明</th><th>支付宝</th><th>打款</th>
+          </tr></thead><tbody></tbody></table></div>
+          <div id="ops-rail" style="position:absolute; top:0; right:0; bottom:0; width:120px; background:#fff; box-shadow:-2px 0 6px rgba(0,0,0,.08); z-index:5; pointer-events:auto;">
+            <div id="ops-rail-head" style="background:#f9fafb; border-bottom:1px solid var(--line); padding:7px 9px; font-size:11.5px; color:var(--sub); font-weight:600;">操作</div>
+            <div id="ops-rail-body" style="overflow-y:auto;"></div>
+          </div>
+        </div>
         <div class="summary" id="ledger-summary"></div>
       </div>
     </div>
@@ -213,6 +217,7 @@ function renderLedger(){
   if(fg==='week'){ const cutoff=new Date(now.getTime()-7*86400000); list=list.filter(r=>new Date(r.createdAt)>=cutoff); }
   if(fg==='month'){ const cutoff=new Date(now.getTime()-30*86400000); list=list.filter(r=>new Date(r.createdAt)>=cutoff); }
 
+  const opsList = [];
   document.querySelector('#tbl tbody').innerHTML=list.map(r=>{
     const [txt,cls]=ST[r.status]||['—','b'];
     const [rvtxt,rvcls]=RV[r.reviewStatus]||['—','b'];
@@ -233,11 +238,12 @@ function renderLedger(){
     const a=r.ai||{};
     const orderCell=(f.orderTime||'—')+(f.orderNo?'<br>订单号 '+esc(f.orderNo):'')+(f.amount?'<br>'+fmtM(f.amount)+' 元':'');
     const aiCell=(a.orderTime||'—')+(a.orderNo?'<br>订单号 '+esc(a.orderNo):'')+(a.amount?'<br>'+fmtM(a.amount)+' 元':'')+(a.confidence!=null?'<br><span style="color:var(--sub)">置信 '+a.confidence+'%</span>':'');
-    // 操作按钮
+    // 操作按钮（收集到 opsList，后续渲染到屏幕右侧固定浮窗，无论怎么横向滚动数据列都可见）
     let ops='<button class="del" onclick="delRec(\''+r.id+'\')">删除</button>';
     if(r.reviewStatus==='pendingVerify') ops+=' <button class="btn small ghost" onclick="recognizeOne('+r.id+')">🤖 识别</button>';
     if(r.reviewStatus==='pendingManual') ops+=' <button class="btn small ghost" onclick="recognizeOne(\''+r.id+'\')">🔁 重新识别</button> <button class="btn small green" onclick="openReview(\''+r.id+'\')">人工审核</button>';
     if(r.paid) ops+=' <button class="del" style="color:var(--sub);border-color:transparent;" onclick="unpayRec(\''+r.id+'\')">撤回</button>';
+    opsList.push(ops);
     return '<tr><td>'+ck+'</td><td>'+r.createdAt.replace('T',' ').slice(0,16)+'</td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.dept1)+(r.dept2?' / '+esc(r.dept2):'')+'</td><td>'+r.date+'</td>'+
       '<td><span class="pill '+rvcls+'">'+rvtxt+'</span></td>'+
       '<td>'+proofs+'</td>'+
@@ -248,8 +254,19 @@ function renderLedger(){
       '<td style="white-space:normal; max-width:240px;">'+(r.verifyInfo&&r.verifyInfo.imageMissing?'<span class="pill r">🖼️ 图片已丢失</span> 请员工重新提交':esc(r.reason||(r.verifyInfo&&r.verifyInfo.differences?('⚠️ '+r.verifyInfo.differences.join('；')):'')))+'</td>'+
       '<td style="white-space:normal;">'+esc(r.ali)+'<br>'+esc(r.aliname)+'</td>'+
       '<td style="white-space:normal; min-width:120px;">'+paidCell+'</td>'+
-      '<td style="white-space:nowrap;">'+ops+'</td></tr>';
-  }).join('')||'<tr><td colspan="15" class="empty">暂无记录</td></tr>';
+      '</tr>';
+  }).join('')||'<tr><td colspan="14" class="empty">暂无记录</td></tr>';
+  // 把操作列内容渲染到右侧固定浮窗（永远可见，不被横向滚动条截断）
+  const opsBody=document.getElementById('ops-rail-body');
+  if(opsBody){
+    opsBody.innerHTML=opsList.map((ops,i)=>'<div style="padding:7px 9px; border-bottom:1px solid #f1f2f4; white-space:nowrap;">'+ops+'</div>').join('');
+    // 同步高度：让浮层行高与表格行高一致（按行号取 tr 的高度）
+    const trs=document.querySelectorAll('#tbl tbody tr');
+    const opRows=opsBody.querySelectorAll(':scope > div');
+    trs.forEach((tr,i)=>{
+      if(opRows[i]) opRows[i].style.height=tr.getBoundingClientRect().height+'px';
+    });
+  }
 
   const pv=records.filter(r=>r.reviewStatus==='pendingVerify').length;
   const pm=records.filter(r=>r.reviewStatus==='pendingManual').length;
