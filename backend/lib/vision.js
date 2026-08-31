@@ -100,10 +100,12 @@ async function recognize(imageBuffer, kind) {
     max_tokens: 500
   };
 
-  // 免费模型有限速（智谱约 5–10 次/分钟），遇 429 指数退避重试
+  // 免费模型有限速且高峰期会持续返回 429/1305（实测需连续重试多次才通），
+  // 采用更长退避：2s → 4s → 8s → 12s，最多 5 次
   const url = baseUrl.replace(/\/$/, '') + '/chat/completions';
+  const BACKOFFS = [2000, 4000, 8000, 12000];
   let resp = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt <= BACKOFFS.length; attempt++) {
     resp = await fetch(url, {
       method: 'POST',
       headers: {
@@ -113,7 +115,7 @@ async function recognize(imageBuffer, kind) {
       body: JSON.stringify(body)
     });
     if (resp.status !== 429 && resp.status !== 503) break;
-    if (attempt < 2) await sleep(1200 * Math.pow(2, attempt)); // 1.2s → 2.4s
+    if (attempt < BACKOFFS.length) await sleep(BACKOFFS[attempt]);
   }
 
   if (!resp.ok) {
