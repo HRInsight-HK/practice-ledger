@@ -249,9 +249,12 @@ router.post('/records/:id/recognize', authMiddleware, requireRole('admin', 'hr')
   const data = getData();
   const r = (data.dinnerRecords || []).find(x => x.id === req.params.id);
   if (!r) return res.status(404).json({ error: '记录不存在' });
+  // 已核验通过或已驳回的记录不允许再识别；待识别/待人工可反复重试识别（智谱限速恢复后再试）
   if (r.reviewStatus === 'verified' || r.reviewStatus === 'rejected') {
     return res.status(400).json({ error: '该记录已核验，无需重复识别' });
   }
+  // 重试识别：清掉上一次的核验信息，重新比对
+  r.verifyInfo = undefined;
   try {
     const out = await recognizeOne(data, r);
     await saveData();

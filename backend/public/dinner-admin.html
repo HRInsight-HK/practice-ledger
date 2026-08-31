@@ -232,7 +232,7 @@ function renderLedger(){
     // 操作按钮
     let ops='<button class="del" onclick="delRec(\''+r.id+'\')">删除</button>';
     if(r.reviewStatus==='pendingVerify') ops+=' <button class="btn small ghost" onclick="recognizeOne('+r.id+')">🤖 识别</button>';
-    if(r.reviewStatus==='pendingManual') ops+=' <button class="btn small green" onclick="openReview(\''+r.id+'\')">人工审核</button>';
+    if(r.reviewStatus==='pendingManual') ops+=' <button class="btn small ghost" onclick="recognizeOne(\''+r.id+'\')">🔁 重新识别</button> <button class="btn small green" onclick="openReview(\''+r.id+'\')">人工审核</button>';
     if(r.paid) ops+=' <button class="del" style="color:var(--sub);border-color:transparent;" onclick="unpayRec(\''+r.id+'\')">撤回</button>';
     return '<tr><td>'+ck+'</td><td>'+r.createdAt.replace('T',' ').slice(0,16)+'</td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.dept1)+(r.dept2?' / '+esc(r.dept2):'')+'</td><td>'+r.date+'</td>'+
       '<td><span class="pill '+rvcls+'">'+rvtxt+'</span></td>'+
@@ -280,13 +280,14 @@ function toggleAll(on){ document.querySelectorAll('.row-check').forEach(c=>{ c.c
 
 // ==================== 识别 ====================
 function recognizeOne(id){
-  const btn=event&&event.target; if(btn){ btn.disabled=true; btn.textContent='识别中…'; }
+  const btn=event&&event.target; const orig=btn?btn.textContent:'🤖 识别';
+  if(btn){ btn.disabled=true; btn.textContent='识别中…'; }
   api('/records/'+id+'/recognize',{method:'POST'}).then(({ok,j})=>{
-    if(btn){ btn.disabled=false; btn.textContent='🤖 识别'; }
+    if(btn){ btn.disabled=false; btn.textContent=orig; }
     if(ok){ alert(j.matched?'✅ 识别一致，自动判定：'+(j.status||'')+'，可报 '+fmtM(j.amount)+' 元':'⚠️ 有差异，已转人工审核：\n'+(j.differences||[]).join('\n')); }
     else { alert('识别失败：'+(j.error||'')); }
     loadRecords();
-  }).catch(()=>{ if(btn){btn.disabled=false;btn.textContent='🤖 识别';} alert('网络错误'); });
+  }).catch(()=>{ if(btn){btn.disabled=false;btn.textContent=orig;} alert('网络错误'); });
 }
 function recognizeAllPending(){
   const pvs=records.filter(r=>r.reviewStatus==='pendingVerify');
