@@ -31,16 +31,39 @@ const PUNCH_PROMPT = `你是考勤打卡信息提取助手。请从这张下班�
 function parseJsonSafe(text) {
   if (!text) return null;
   let s = String(text).trim();
-  // 去掉 markdown 代码围栏
-  s = s.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
-  const start = s.indexOf('{');
-  const end = s.lastIndexOf('}');
-  if (start === -1 || end === -1) return null;
-  try {
-    return JSON.parse(s.slice(start, end + 1));
-  } catch (e) {
-    return null;
+  if (!s) return null;
+
+  // 1) 去掉最外层 markdown 代码围栏（```json ... ``` / ``` ... ```）
+  s = s.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+
+  // 2) 优先尝试直接解析整段（标准情形：模型纯 JSON 输出）
+  try { return JSON.parse(s); } catch (e) {}
+
+  // 3) 抽取第一对最外层 { ... }（处理模型先写一句"以下是..."再写 JSON 的情形）
+  const firstBrace = s.indexOf('{');
+  const lastBrace = s.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const sub = s.slice(firstBrace, lastBrace + 1);
+    try { return JSON.parse(sub); } catch (e) {}
   }
+
+  // 4) 暴力清洗：去掉模型常见的解释文本前缀（"好的，以下是..."/"根据图片..."/"Here is the JSON:"等）
+  //    然后再做一次 { ... } 抽取
+  const cleaned = s
+    .replace(/^(好的|以下是|根据图片|根据所给|根据提供|这是|答案|输出|Json|JSON|Result|结果)[:：]?[^\n]*\n+/i, '')
+    .replace(/^[^\n{]*?(?=[\n{])/, '')
+    .trim();
+  if (cleaned !== s) {
+    try { return JSON.parse(cleaned); } catch (e) {}
+    const b1 = cleaned.indexOf('{');
+    const b2 = cleaned.lastIndexOf('}');
+    if (b1 !== -1 && b2 > b1) {
+      try { return JSON.parse(cleaned.slice(b1, b2 + 1)); } catch (e) {}
+    }
+  }
+
+  // 5) 全部失败 → 返回 null
+  return null;
 }
 
 function normTime(t) {
@@ -72,11 +95,30 @@ const DEFAULT_MODEL = 'glm-4.6v-flash';
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function recognize(imageBuffer, kind) {
-  // 测试模式：MOCK_VISION=1 时返回固定结果（用于端到端验证，不上线）
+  // 测试模式：MOCK_VISION=1 返回正常；MOCK_VISION=2 第一次返回坏 JSON（模拟限速），走自纠错重试
   if (process.env.MOCK_VISION === '1') {
     return kind === 'punch'
       ? { model: 'mock', confidence: 95, punchDate: '2026-08-28', punchTime: '21:10', raw: { punchDate: '2026-08-28', punchTime: '21:10' } }
       : { model: 'mock', confidence: 95, orderTime: '19:42', doneTime: '20:05', orderNo: 'MT20260828A102', amount: 46.5, raw: { orderTime: '19:42', orderNo: 'MT20260828A102', amount: 46.5 } };
+  }
+  // MOCK_VISION=2：模拟智谱限速（第一次返回坏 JSON），验证自纠错重试能救回
+  if (process.env.MOCK_VISION === '2') {
+    let callCount = 0;
+    global.fetch = async function(url, opts) {
+      callCount++;
+      // 第 1 次：返回坏 JSON（模拟限速时模型输出混乱）
+      if (callCount === 1) {
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: '好的，让我看看图片... 这是识别说明。' } }]
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      // 第 2 次（重答）：返回 JSON
+      const ok = kind === 'punch'
+        ? { punchDate: '2026-08-28', punchTime: '21:10', confidence: 95 }
+        : { orderTime: '19:42', doneTime: '20:05', orderNo: 'MT20260828A102', amount: 46.5, confidence: 95 };
+      return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(ok) } }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    process.env.VISION_API_KEY = process.env.VISION_API_KEY || 'MOCK_KEY_FOR_TEST';
   }
   const apiKey = process.env.VISION_API_KEY;
   const baseUrl = process.env.VISION_BASE_URL || DEFAULT_BASE_URL;
@@ -139,10 +181,61 @@ async function recognize(imageBuffer, kind) {
   const json = await resp.json();
   const content = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
   const parsed = parseJsonSafe(content);
-  if (!parsed) {
-    const err = new Error('识别结果解析失败，请重新上传清晰截图');
+if (!parsed) {
+    // 模型返回非 JSON：常见于限速/繁忙时。自动让模型"自纠错"重答一次（换更严格的 prompt）
+    const strictPrompt = '只看图，严格只输出 JSON：{"orderTime":"HH:MM","doneTime":"HH:MM","orderNo":"string","amount":number,"confidence":0-100}（punch 类型为 {"punchDate":"YYYY-MM-DD","punchTime":"HH:MM","confidence":0-100}）。字段看不清就 null。无任何解释、Markdown、前缀。';
+    const retryBody = { ...body, messages: [{ role: 'user', content: [
+      { type: 'text', text: strictPrompt },
+      { type: 'image_url', image_url: { url: dataUrl } }
+    ]}]};
+    let retryParsed = null;
+    let retryContent = null;
+    for (let ra = 0; ra < 2; ra++) {
+      const retryResp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+        body: JSON.stringify(retryBody)
+      });
+      if (retryResp.status === 429 || retryResp.status === 503) {
+        if (ra < 1) await sleep(2000);
+        continue;
+      }
+      if (!retryResp.ok) break;
+      const rj = await retryResp.json().catch(() => null);
+      retryContent = rj && rj.choices && rj.choices[0] && rj.choices[0].message && rj.choices[0].message.content;
+      retryParsed = parseJsonSafe(retryContent);
+      if (retryParsed) break;
+    }
+    if (retryParsed) {
+      const result = { model, confidence: retryParsed.confidence == null ? null : Number(retryParsed.confidence), raw: retryParsed };
+      if (kind === 'punch') {
+        result.punchDate = normDate(retryParsed.punchDate);
+        result.punchTime = normTime(retryParsed.punchTime);
+        if (!result.punchDate || !result.punchTime) {
+          const err = new Error('打卡截图识别不完整，需能看清打卡日期与时间');
+          err.code = 'VISION_INCOMPLETE';
+          err.partial = result;
+          throw err;
+        }
+      } else {
+        result.orderTime = normTime(retryParsed.orderTime);
+        result.doneTime = normTime(retryParsed.doneTime) || result.orderTime;
+        result.orderNo = retryParsed.orderNo ? String(retryParsed.orderNo).trim() : null;
+        result.amount = retryParsed.amount == null ? null : Number(String(retryParsed.amount).replace(/[^\d.]/g, ''));
+        if (!result.orderTime || !result.orderNo || !result.amount) {
+          const err = new Error('外卖截图识别不完整，需能看清下单时间、订单号、实付金额');
+          err.code = 'VISION_INCOMPLETE';
+          err.partial = result;
+          throw err;
+        }
+      }
+      return result;
+    }
+
+    const preview = String(retryContent || content || '').replace(/\s+/g, ' ').slice(0, 120);
+    const err = new Error('识别结果不是有效 JSON（智谱可能限速或繁忙）。原始返回：' + preview);
     err.code = 'VISION_PARSE_FAIL';
-    err.raw = String(content || '').slice(0, 300);
+    err.raw = String(content || '').slice(0, 500);
     throw err;
   }
 
