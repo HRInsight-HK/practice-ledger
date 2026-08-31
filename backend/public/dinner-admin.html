@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>晚餐报销 · SSC 台账后台</title>
+<title>晚餐报销 · 台账后台</title>
 <style>
   :root{ --ink:#1f2937; --sub:#6b7280; --line:#e5e7eb; --bg:#f7f8fa; --card:#fff;
     --blue:#2563eb; --blue-bg:#eff6ff; --green:#059669; --green-bg:#ecfdf5;
     --red:#dc2626; --red-bg:#fef2f2; --amber:#d97706; --amber-bg:#fffbeb; --r:10px; }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--ink); font-size:14px; line-height:1.6;}
-  .wrap{max-width:1100px; margin:0 auto; padding:20px 14px 60px;}
+  .wrap{max-width:1180px; margin:0 auto; padding:20px 14px 60px;}
   header{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;}
   header h1{font-size:18px;}
   .tabs{display:flex; gap:6px; margin-bottom:14px;}
@@ -26,6 +26,7 @@
   .btn{display:inline-block; padding:8px 18px; background:var(--blue); color:#fff; border:none; border-radius:8px; font-size:14px; cursor:pointer; font-weight:600;}
   .btn.ghost{background:#fff; color:var(--blue); border:1px solid var(--blue);}
   .btn.warn{background:#fff; color:var(--red); border:1px solid var(--red);}
+  .btn.green{background:var(--green); border:none; color:#fff;}
   .btn.small{padding:5px 12px; font-size:12px; font-weight:500;}
   table{width:100%; border-collapse:collapse; font-size:12.5px; background:#fff;}
   th{background:#f9fafb; text-align:left; padding:7px 9px; font-size:11.5px; color:var(--sub); border-bottom:1px solid var(--line); white-space:nowrap;}
@@ -35,6 +36,7 @@
   .pill.r{background:var(--red-bg); color:var(--red);}
   .pill.b{background:var(--blue-bg); color:var(--blue);}
   .pill.a{background:var(--amber-bg); color:var(--amber);}
+  .pill.p{background:#f3e8ff; color:#7c3aed;}
   .money{font-variant-numeric:tabular-nums; font-weight:600;}
   .money.cap{color:var(--amber);}
   .summary{font-size:12.5px; color:var(--sub); margin-top:10px;}
@@ -47,21 +49,29 @@
   .del{color:var(--red); cursor:pointer; font-size:12px; text-decoration:underline; background:none; border:none;}
   .empty{text-align:center; color:var(--sub); padding:24px 0;}
   .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:100;}
-  .modal{background:#fff;border-radius:var(--r);padding:18px;max-width:520px;width:92%;}
+  .modal{background:#fff;border-radius:var(--r);padding:18px;max-width:640px;width:94%;max-height:90vh;overflow-y:auto;}
   .modal h3{margin-bottom:10px;}
   .receipt-link{font-size:11px;color:var(--blue);margin-left:4px;text-decoration:underline;}
+  .proof-thumb{width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--line);cursor:zoom-in;}
+  .cmp{font-size:12px;margin:1px 0;}
+  .cmp .f{color:var(--sub);}
+  .cmp .mismatch{color:var(--red);font-weight:600;}
+  .cmp .match{color:var(--green);}
+  .count-badge{background:var(--amber);color:#fff;border-radius:20px;padding:0 7px;font-size:11px;margin-left:4px;}
+  .count-badge.red{background:var(--red);}
+  .count-badge.blue{background:var(--blue);}
 </style>
 </head>
 <body>
 <div class="wrap">
   <!-- 登录 -->
   <div class="login card" id="view-login">
-    <h3>SSC 后台登录</h3>
+    <h3>晚餐报销台账后台登录</h3>
     <div style="margin-bottom:10px;"><label>账号</label><input id="l-user" placeholder="hr / admin"></div>
-    <div style="margin-bottom:12px;"><label>密码</label><input id="l-pass" type="password" placeholder=""></div>
+    <div style="margin-bottom:12px;"><label>密码</label><input id="l-pass" type="password"></div>
     <button class="btn" style="width:100%;" onclick="doLogin()">登录</button>
     <div class="err" id="l-err"></div>
-    <div class="summary" style="margin-top:10px;">使用实操台账系统账号（SSC：hr / 行政：admin）</div>
+    <div class="summary" style="margin-top:10px;">使用台账系统账号（SSC：hr / 行政：admin）</div>
   </div>
 
   <!-- 主界面 -->
@@ -81,18 +91,31 @@
         <h3>提交记录</h3>
         <div class="toolbar">
           <input id="flt-name" placeholder="按姓名筛选" oninput="renderLedger()">
-          <select id="flt-status" onchange="renderLedger()"><option value="">全部状态</option><option value="PASS">仅通过</option><option value="FAIL">仅不通过</option></select>
+          <select id="flt-review" onchange="renderLedger()" style="width:auto;">
+            <option value="">全部核验状态</option>
+            <option value="pendingVerify">待识别</option>
+            <option value="pendingManual">待人工审核</option>
+            <option value="verified">已核验</option>
+            <option value="rejected">已驳回</option>
+          </select>
+          <select id="flt-status" onchange="renderLedger()"><option value="">全部判定</option><option value="PASS">仅通过</option><option value="FAIL">仅不通过</option></select>
           <select id="flt-paid" onchange="renderLedger()" style="width:auto;">
             <option value="">全部打款</option><option value="UNPAID">仅未打款</option><option value="PAID">仅已打款</option>
           </select>
+          <select id="flt-range" onchange="renderLedger()" style="width:auto;">
+            <option value="">全部时间</option>
+            <option value="week">近 1 周</option>
+            <option value="month">近 1 月</option>
+          </select>
           <span style="flex:1"></span>
+          <button class="btn small green" id="btn-recognize-all" onclick="recognizeAllPending()">🤖 识别全部待核验</button>
           <button class="btn small ghost" id="btn-batch-pay" onclick="openBatchPay()" disabled>💰 批量打款（0）</button>
           <button class="btn small ghost" onclick="loadRecords()">↻ 刷新</button>
           <button class="btn small ghost" onclick="exportCSV()">⬇ 导出 CSV</button>
         </div>
         <div class="scroll"><table id="tbl"><thead><tr>
           <th><input type="checkbox" id="check-all" onchange="toggleAll(this.checked)"></th>
-          <th>提交时间</th><th>姓名</th><th>一级部门</th><th>用餐日期</th><th>通道</th><th>拼单</th><th>下单</th><th>打卡</th><th>实付</th><th>判定</th><th>可报</th><th>原因 / 说明</th><th>支付宝</th><th>打款</th><th></th>
+          <th>提交时间</th><th>姓名</th><th>一级部门</th><th>用餐日期</th><th>核验</th><th>证明图</th><th>员工填写</th><th>识别结果</th><th>判定</th><th>可报</th><th>原因 / 说明</th><th>支付宝</th><th>打款</th><th>操作</th>
         </tr></thead><tbody></tbody></table></div>
         <div class="summary" id="ledger-summary"></div>
       </div>
@@ -121,7 +144,8 @@ const TOKEN_KEY='dinner_admin_token', USER_KEY='dinner_admin_user';
 let records=[];
 const ST={PASS_A:['通过','g'],PASS_B:['通过','g'],PASS_CAPPED:['通过(封顶)','a'],
   FAIL_BLUR:['不通过','r'],FAIL_DATE:['不通过','r'],FAIL_DUP:['不通过','r'],FAIL_TIME:['不通过','r'],
-  FAIL_WEEKCAP:['不通过(周满)','r'],FAIL_ORDERCAP:['不通过(单满)','r']};
+  FAIL_WEEKCAP:['不通过(周满)','r'],FAIL_ORDERCAP:['不通过(单满)','r'],FAIL_MANUAL:['人工驳回','r']};
+const RV={pendingVerify:['待识别','b'],pendingManual:['待人工审核','a'],verified:['已核验','g'],rejected:['已驳回','r']};
 
 function api(path,opts){ const h={'Content-Type':'application/json'};
   const t=localStorage.getItem(TOKEN_KEY); if(t) h['Authorization']='Bearer '+t;
@@ -169,34 +193,71 @@ function weekLabel(m){ const a=new Date(m+'T00:00:00'),b=new Date(m+'T00:00:00')
 function fmtM(n){ return (Math.round(n*10)/10).toFixed(1); }
 
 function renderLedger(){
-  const fn=document.getElementById('flt-name').value.trim(), fs=document.getElementById('flt-status').value, fp=document.getElementById('flt-paid').value;
-  const list=records.filter(r=>(!fn||r.name.includes(fn))&&(!fs||(fs==='PASS'?r.status.startsWith('PASS'):r.status.startsWith('FAIL')))&&(!fp||(fp==='PAID'?r.paid:!r.paid)));
+  const fn=document.getElementById('flt-name').value.trim();
+  const fr=document.getElementById('flt-review').value;
+  const fs=document.getElementById('flt-status').value;
+  const fp=document.getElementById('flt-paid').value;
+  const fg=document.getElementById('flt-range').value;
+  const now=new Date();
+  let list=records.filter(r=>
+    (!fn||r.name.includes(fn))&&
+    (!fr||r.reviewStatus===fr)&&
+    (!fs||(fs==='PASS'?r.status&&r.status.startsWith('PASS'):r.status&&r.status.startsWith('FAIL')))&&
+    (!fp||(fp==='PAID'?r.paid:!r.paid))
+  );
+  if(fg==='week'){ const cutoff=new Date(now.getTime()-7*86400000); list=list.filter(r=>new Date(r.createdAt)>=cutoff); }
+  if(fg==='month'){ const cutoff=new Date(now.getTime()-30*86400000); list=list.filter(r=>new Date(r.createdAt)>=cutoff); }
+
   document.querySelector('#tbl tbody').innerHTML=list.map(r=>{
     const [txt,cls]=ST[r.status]||['—','b'];
-    const canCheck=r.status&&r.status.startsWith('PASS')&&!r.paid;
+    const [rvtxt,rvcls]=RV[r.reviewStatus]||['—','b'];
+    const canCheck=r.status&&r.status.startsWith('PASS')&&!r.paid&&r.reviewStatus==='verified';
     const ck=canCheck?'<input type="checkbox" class="row-check" data-id="'+r.id+'" data-name="'+esc(r.name)+'" data-amount="'+r.amount+'" onchange="onCheckChange()">':'<span style="color:var(--sub)">—</span>';
     const paidCell=r.paid
-      ? '<span class="pill g" title="'+(r.paidAt||'')+'">已打款</span> '+(r.paidReceipt&&r.paidReceipt.url?'<a href="'+esc(r.paidReceipt.url)+'" target="_blank" class="receipt-link">凭证</a>':'<br><span style="font-size:11px;color:var(--sub)">'+(r.paidAt||'').slice(0,16)+(r.paidNote?' · '+esc(r.paidNote):'')+'</span>')
+      ? '<span class="pill g" title="'+(r.paidAt||'')+'">已打款</span> '+(r.paidReceipt&&r.paidReceipt.url?'<a href="'+esc(r.paidReceipt.url)+'" target="_blank" class="receipt-link">凭证</a>':'')
       : '<span class="pill b">未打款</span>';
+    // 证明图缩略
+    const proofs=(r.orderImg?'<img class="proof-thumb" src="'+esc(r.orderImg)+'" title="订单证明图" onclick="viewImg(\''+esc(r.orderImg)+'\')">':'')+(r.punchImg?'<img class="proof-thumb" src="'+esc(r.punchImg)+'" title="打卡证明图" onclick="viewImg(\''+esc(r.punchImg)+'\')">':'');
+    // 员工填写 vs 识别结果
+    const f=r.fields||{};
+    const a=r.ai||{};
+    const orderCell=(f.orderTime||'—')+(f.orderNo?'<br>订单号 '+esc(f.orderNo):'')+(f.amount?'<br>'+fmtM(f.amount)+' 元':'');
+    const aiCell=(a.orderTime||'—')+(a.orderNo?'<br>订单号 '+esc(a.orderNo):'')+(a.amount?'<br>'+fmtM(a.amount)+' 元':'')+(a.confidence!=null?'<br><span style="color:var(--sub)">置信 '+a.confidence+'%</span>':'');
+    // 操作按钮
+    let ops='<button class="del" onclick="delRec(\''+r.id+'\')">删除</button>';
+    if(r.reviewStatus==='pendingVerify') ops+=' <button class="btn small ghost" onclick="recognizeOne('+r.id+')">🤖 识别</button>';
+    if(r.reviewStatus==='pendingManual') ops+=' <button class="btn small green" onclick="openReview(\''+r.id+'\')">人工审核</button>';
+    if(r.paid) ops+=' <button class="del" style="color:var(--sub);border-color:transparent;" onclick="unpayRec(\''+r.id+'\')">撤回</button>';
     return '<tr><td>'+ck+'</td><td>'+r.createdAt.replace('T',' ').slice(0,16)+'</td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.dept1)+(r.dept2?' / '+esc(r.dept2):'')+'</td><td>'+r.date+'</td>'+
-      '<td><span class="pill b">'+r.channel+'</span></td>'+
-      '<td>'+(r.sharedCount>1?'<span class="pill a">'+r.sharedCount+' 人</span>':'1 人')+'</td>'+
-      '<td>'+(r.ai&&r.ai.orderTime||'—')+'</td><td>'+(r.ai&&r.ai.punchTime||'—')+'</td>'+
-      '<td class="money">'+(r.ai&&r.ai.amount?fmtM(r.ai.amount):'—')+'</td>'+
+      '<td><span class="pill '+rvcls+'">'+rvtxt+'</span></td>'+
+      '<td>'+proofs+'</td>'+
+      '<td style="white-space:normal;max-width:150px;">'+orderCell+'</td>'+
+      '<td style="white-space:normal;max-width:150px;">'+aiCell+'</td>'+
       '<td><span class="pill '+cls+'">'+txt+'</span></td>'+
       '<td class="money '+(r.status==='PASS_CAPPED'?'cap':'')+'">'+(r.amount>0?fmtM(r.amount)+' 元':'—')+'</td>'+
-      '<td style="white-space:normal; max-width:260px;">'+esc(r.reason)+'</td>'+
+      '<td style="white-space:normal; max-width:240px;">'+esc(r.reason||(r.verifyInfo&&r.verifyInfo.differences?('⚠️ '+r.verifyInfo.differences.join('；')):''))+'</td>'+
       '<td style="white-space:normal;">'+esc(r.ali)+'<br>'+esc(r.aliname)+'</td>'+
-      '<td style="white-space:normal; min-width:140px;">'+paidCell+'</td>'+
-      '<td style="white-space:nowrap;"><button class="del" onclick="delRec(\''+r.id+'\')">删除</button>'+(r.paid?' <button class="del" style="text-decoration:underline;color:var(--sub);border-color:transparent;" onclick="unpayRec(\''+r.id+'\')">撤回</button>':'')+'</td></tr>';
+      '<td style="white-space:normal; min-width:120px;">'+paidCell+'</td>'+
+      '<td style="white-space:nowrap;">'+ops+'</td></tr>';
   }).join('')||'<tr><td colspan="15" class="empty">暂无记录</td></tr>';
-  const passN=records.filter(r=>r.status.startsWith('PASS')).length;
+
+  const pv=records.filter(r=>r.reviewStatus==='pendingVerify').length;
+  const pm=records.filter(r=>r.reviewStatus==='pendingManual').length;
+  const passN=records.filter(r=>r.status&&r.status.startsWith('PASS')&&r.reviewStatus==='verified').length;
   const paidN=records.filter(r=>r.paid).length;
-  const passPaid=records.filter(r=>r.status.startsWith('PASS')&&r.paid).length;
-  const unpaidAmt=records.filter(r=>r.status.startsWith('PASS')&&!r.paid).reduce((s,r)=>s+r.amount,0);
-  const paidAmt=records.filter(r=>r.status.startsWith('PASS')&&r.paid).reduce((s,r)\n=>s+r.amount,0);
+  const passPaid=records.filter(r=>r.status&&r.status.startsWith('PASS')&&r.paid).length;
+  const unpaidAmt=records.filter(r=>r.status&&r.status.startsWith('PASS')&&!r.paid).reduce((s,r)=>s+r.amount,0);
+  const paidAmt=records.filter(r=>r.status&&r.status.startsWith('PASS')&&r.paid).reduce((s,r)=>s+r.amount,0);
   document.getElementById('ledger-summary').innerHTML=records.length?(
-    `共 ${records.length} 条 · 通过 ${passN} · 已打款 ${passPaid}/${passN}（${fmtM(paidAmt)} 元） · 待打款 ${fmtM(unpaidAmt)} 元`):'';
+    `共 ${records.length} 条 · 待识别 ${pv} · 待人工 ${pm} · 已核验通过 ${passN} · 已打款 ${passPaid}/${passN}（${fmtM(paidAmt)} 元） · 待打款 ${fmtM(unpaidAmt)} 元`):'';
+  document.getElementById('btn-recognize-all').textContent=pv?'🤖 识别全部待核验（'+pv+'）':'🤖 识别全部待核验';
+  // 更新 tab 徽标
+  document.querySelectorAll('.tab').forEach(t=>{
+    const n=t.dataset.t==='ledger'?((pv+pm)||''):'';
+    const badge=t.querySelector('.count-badge');
+    if(n){ if(!badge) t.insertAdjacentHTML('beforeend','<span class="count-badge'+(pm?' red':'')+'">'+n+'</span>'); else badge.textContent=n; }
+    else if(badge) badge.remove();
+  });
   onCheckChange();
 }
 
@@ -204,16 +265,106 @@ function onCheckChange(){
   const cks=[...document.querySelectorAll('.row-check:checked')];
   const btn=document.getElementById('btn-batch-pay');
   btn.disabled=cks.length===0;
-  // 按姓名分组统计（提示用户一目了然）
   const byName={};
-  cks.forEach(c=>{
-    const n=c.dataset.name, a=parseFloat(c.dataset.amount||0);
-    byName[n]=(byName[n]||0)+a;
-  });
+  cks.forEach(c=>{ const n=c.dataset.name, a=parseFloat(c.dataset.amount||0); byName[n]=(byName[n]||0)+a; });
   const summary=Object.keys(byName).length===0?'':(' · '+Object.entries(byName).map(([n,a])=>`${n} ${fmtM(a)}`).join(' / '));
   btn.textContent=`💰 批量打款（${cks.length}${summary}）`;
 }
 function toggleAll(on){ document.querySelectorAll('.row-check').forEach(c=>{ c.checked=on; }); onCheckChange(); }
+
+// ==================== 识别 ====================
+function recognizeOne(id){
+  const btn=event&&event.target; if(btn){ btn.disabled=true; btn.textContent='识别中…'; }
+  api('/records/'+id+'/recognize',{method:'POST'}).then(({ok,j})=>{
+    if(btn){ btn.disabled=false; btn.textContent='🤖 识别'; }
+    if(ok){ alert(j.matched?'✅ 识别一致，自动判定：'+(j.status||'')+'，可报 '+fmtM(j.amount)+' 元':'⚠️ 有差异，已转人工审核：\n'+(j.differences||[]).join('\n')); }
+    else { alert('识别失败：'+(j.error||'')); }
+    loadRecords();
+  }).catch(()=>{ if(btn){btn.disabled=false;btn.textContent='🤖 识别';} alert('网络错误'); });
+}
+function recognizeAllPending(){
+  const pvs=records.filter(r=>r.reviewStatus==='pendingVerify');
+  const groups=[...new Set(pvs.map(r=>r.groupNo).filter(Boolean))];
+  if(!pvs.length){ alert('没有待识别的记录'); return; }
+  if(!confirm('将识别 '+pvs.length+' 条待核验记录，识别一致自动通过，有差异转人工审核。继续？')) return;
+  // 按整单逐个识别
+  let done=0;
+  const run=groups.concat(pvs.filter(r=>!r.groupNo).map(r=>r.id));
+  const seq=(arr)=>{ if(!arr.length){ loadRecords(); alert('识别完成'); return; }
+    const g=arr.shift();
+    const apiCall= g.startsWith('G')
+      ? api('/group/'+g+'/recognize',{method:'POST'})
+      : api('/records/'+g+'/recognize',{method:'POST'});
+    apiCall.finally(()=>seq(arr));
+  };
+  // 简化：直接逐条识别（整单接口同样可用，这里用单条更稳妥）
+  const ids=pvs.map(r=>r.id);
+  const runSeq=(list)=>{ if(!list.length){ loadRecords(); alert('识别完成'); return; }
+    api('/records/'+list.shift()+'/recognize',{method:'POST'}).finally(()=>runSeq(list));
+  };
+  runSeq(ids.slice());
+}
+
+// ==================== 人工审核 ====================
+function openReview(id){
+  const r=records.find(x=>x.id===id); if(!r) return;
+  const f=r.fields||{}, a=r.ai||{};
+  const diffs=(r.verifyInfo&&r.verifyInfo.differences)||[];
+  const html=`
+    <div class="modal-mask" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <h3>人工审核 · ${esc(r.name)}（${r.date}）</h3>
+        ${diffs.length?'<div class="cmp" style="margin-bottom:8px;"><b>差异提示：</b>'+(diffs.map(d=>'<div class="mismatch">⚠️ '+esc(d)+'</div>').join(''))+'</div>':''}
+        <div style="display:flex;gap:10px;margin-bottom:10px;">
+          <div style="flex:1;"><div style="font-size:12px;color:var(--sub)">员工填写</div>
+            <div style="font-size:12.5px;">下单 ${esc(f.orderTime||'—')}<br>订单号 ${esc(f.orderNo||'—')}<br>实付 ${fmtM(f.amount||0)} 元<br>打卡 ${esc(f.punchTime||'—')} ${esc(f.punchDate||'')}</div></div>
+          <div style="flex:1;"><div style="font-size:12px;color:var(--sub)">截图识别</div>
+            <div style="font-size:12.5px;">下单 ${esc(a.orderTime||'—')}<br>订单号 ${esc(a.orderNo||'—')}<br>实付 ${fmtM(a.amount||0)} 元<br>打卡 ${esc(a.punchTime||'—')} ${esc(a.punchDate||'')}</div></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+          ${r.orderImg?'<a href="'+esc(r.orderImg)+'" target="_blank"><img src="'+esc(r.orderImg)+'" style="max-width:200px;max-height:140px;border-radius:6px;border:1px solid var(--line)"></a>':''}
+          ${r.punchImg?'<a href="'+esc(r.punchImg)+'" target="_blank"><img src="'+esc(r.punchImg)+'" style="max-width:200px;max-height:140px;border-radius:6px;border:1px solid var(--line)"></a>':''}
+        </div>
+        <div style="margin-bottom:10px;"><label>核对后修正字段（不填则用员工填写/识别值）</label>
+          <div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div><label>下单时间</label><input id="rv-order" value="${esc(a.orderTime||f.orderTime||'')}"></div>
+            <div><label>订单号</label><input id="rv-no" value="${esc(a.orderNo||f.orderNo||'')}"></div>
+            <div><label>实付金额</label><input id="rv-amount" value="${a.amount||f.amount||''}"></div>
+            <div><label>打卡时间</label><input id="rv-punch" value="${esc(a.punchTime||f.punchTime||'')}"></div>
+          </div>
+        </div>
+        <div style="margin-bottom:10px;"><label>备注（选填）</label><input id="rv-note" placeholder="如：打卡图较糊，人工核对无误"></div>
+        <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn small warn" onclick="reviewAction('${id}','reject')">✗ 驳回</button>
+          <button class="btn small ghost" onclick="closeModal()">取消</button>
+          <button class="btn small green" onclick="reviewAction('${id}','approve')">✓ 核验通过</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+function reviewAction(id, action){
+  const fd={action};
+  if(action==='approve'){
+    fd.fields={
+      orderTime:document.getElementById('rv-order').value.trim(),
+      orderNo:document.getElementById('rv-no').value.trim(),
+      amount:parseFloat(document.getElementById('rv-amount').value)||0,
+      punchTime:document.getElementById('rv-punch').value.trim()
+    };
+    fd.note=document.getElementById('rv-note').value.trim();
+  } else {
+    fd.note=document.getElementById('rv-note')?document.getElementById('rv-note').value.trim():'';
+  }
+  api('/records/'+id+'/manual-review',{method:'POST',body:JSON.stringify(fd)}).then(({ok,j})=>{
+    closeModal();
+    if(!ok){ alert(j.error||'操作失败'); return; }
+    alert(action==='approve'?('✅ 已核验通过，判定：'+(j.status||'')+'，可报 '+fmtM(j.amount)+' 元'):'已驳回');
+    loadRecords();
+  }).catch(()=>{ alert('网络错误'); });
+}
+
+function viewImg(url){ window.open(url,'_blank'); }
 
 function delRec(id){
   if(!confirm('确认删除这条提交记录？删除后其周累计额度也会释放。')) return;
@@ -223,6 +374,8 @@ function unpayRec(id){
   if(!confirm('撤回这条的打款标记？')) return;
   api('/records/'+id+'/unpay',{method:'POST'}).then(({ok,j})=>{ if(ok) loadRecords(); else alert(j.error||'撤回失败'); });
 }
+
+function closeModal(){ const m=document.querySelector('.modal-mask'); if(m) m.remove(); }
 
 // ==================== 批量打款模态 ====================
 function openBatchPay(){
@@ -239,14 +392,8 @@ function openBatchPay(){
         <h3>💰 批量打款（${cks.length} 条 · ${fmtM(total)} 元）</h3>
         <p style="font-size:13px;color:var(--sub);margin-bottom:10px;">一次上传一张转账凭证，对应一笔支付宝转账；同一批次记录共享批次号便于追溯。</p>
         <table><thead><tr><th>姓名</th><th>笔数</th><th>合计金额</th></tr></thead><tbody>${rows}</tbody></table>
-        <div style="margin-top:12px;">
-          <label>打款凭证截图（PNG/JPG/WEBP，可选）</label>
-          <input type="file" id="pay-receipt" accept="image/*">
-        </div>
-        <div style="margin-top:10px;">
-          <label>备注（可选，如"周五周结 8 月第 3 周"）</label>
-          <input id="pay-note" placeholder="例如：支付宝转账 2026-08-29 周五">
-        </div>
+        <div style="margin-top:12px;"><label>打款凭证截图（PNG/JPG/WEBP，可选）</label><input type="file" id="pay-receipt" accept="image/*"></div>
+        <div style="margin-top:10px;"><label>备注（可选）</label><input id="pay-note" placeholder="例如：支付宝转账 2026-08-29 周五"></div>
         <div style="margin-top:14px;text-align:right;">
           <button class="btn small ghost" onclick="closeModal()">取消</button>
           <button class="btn" onclick="submitBatchPay('${ids}')">确认打款</button>
@@ -255,17 +402,12 @@ function openBatchPay(){
     </div>`;
   document.body.insertAdjacentHTML('beforeend', html);
 }
-function closeModal(){ const m=document.querySelector('.modal-mask'); if(m) m.remove(); }
 function submitBatchPay(ids){
   const fd=new FormData();
-  ids.split(',').forEach(id=>fd.append('ids',id));
-  // 后端期望 ids 是 csv（一次性字段）；但 multipart 多个同名会被解析为数组。改为 json ids：
   const file=document.getElementById('pay-receipt').files[0];
   if(file) fd.append('receipt',file);
   const note=document.getElementById('pay-note').value.trim();
   if(note) fd.append('note',note);
-  // 把 ids 合并为 csv，覆写 fd 里的同名多值
-  fd.delete('ids');
   fd.append('ids',ids);
   const token=localStorage.getItem(TOKEN_KEY);
   fetch('/api/dinner/records/batch-pay',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd})
@@ -273,7 +415,7 @@ function submitBatchPay(ids){
     .then(({ok,j})=>{
       if(!ok){ alert(j.error||'打款失败'); return; }
       closeModal();
-      alert('已打款 '+j.paidCount+' 条，合计 '+fmtM(j.totalAmount)+' 元'+(j.skipped&&j.skipped.length?'；跳过 '+j.skipped.length+' 条（'+j.skipped.map(s=>s.reason).join(' / ')+'）':''));
+      alert('已打款 '+j.paidCount+' 条，合计 '+fmtM(j.totalAmount)+' 元'+(j.skipped&&j.skipped.length?'；跳过 '+j.skipped.length+' 条':''));
       loadRecords();
     })
     .catch(()=>alert('网络错误'));
@@ -286,7 +428,7 @@ function renderWeekly(){
     sel.innerHTML=weeks.map(w=>'<option value="'+w+'">'+weekLabel(w)+'</option>').join('');
   }
   const wk=sel.value||weeks[0]; if(!wk) return;
-const passes=records.filter(r=>r.status.startsWith('PASS')&&mondayOf(r.date)===wk);
+  const passes=records.filter(r=>r.status&&r.status.startsWith('PASS')&&r.reviewStatus==='verified'&&mondayOf(r.date)===wk);
   const byName={};
   passes.forEach(r=>{
     if(!byName[r.name]) byName[r.name]={name:r.name,ali:r.ali,aliname:r.aliname,n:0,sum:0,paid:0,paidSum:0};
@@ -324,9 +466,12 @@ function makeTransfer(){
 }
 
 function exportCSV(){
-  const head='提交时间,姓名,一级部门,二级部门,用餐日期,通道,拼单人数,下单时间,打卡时间,实付金额,判定结果,可报金额,原因说明,支付宝账号,支付宝实名\n';
-  const body=records.map(r=>[r.createdAt.replace('T',' ').slice(0,16),r.name,r.dept1,r.dept2||'',r.date,r.channel,r.sharedCount||1,r.ai&&r.ai.orderTime||'',r.ai&&r.ai.punchTime||'',
-    r.ai&&r.ai.amount||'',(ST[r.status]||['—'])[0],r.amount,r.reason.replace(/[,，]/g,'；'),r.ali,r.aliname].join(',')).join('\n');
+  const head='提交时间,姓名,一级部门,二级部门,用餐日期,核验状态,员工下单,员工打卡,识别下单,识别打卡,判定结果,可报金额,原因说明,支付宝账号,支付宝实名\n';
+  const body=records.map(r=>[r.createdAt.replace('T',' ').slice(0,16),r.name,r.dept1,r.dept2||'',r.date,
+    (RV[r.reviewStatus]||[''])[0],
+    (r.fields&&(r.fields.orderTime||''))+'/'+(r.fields&&r.fields.punchTime||''),
+    (r.ai&&(r.ai.orderTime||''))+'/'+(r.ai&&r.ai.punchTime||''),
+    (ST[r.status]||['—'])[0],r.amount,(r.reason||'').replace(/[,，]/g,'；'),r.ali,r.aliname].join(',')).join('\n');
   const blob=new Blob(['\ufeff'+head+body],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='晚餐报销审核台账.csv'; a.click();
 }

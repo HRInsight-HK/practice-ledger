@@ -9,47 +9,28 @@ const vision = require('../lib/vision');
 
 const router = express.Router();
 
-// ==================== 截图识别（免登录，员工上传即识别）====================
-// 内存暂存图片，识别后不落盘（只返回字段），避免敏感截图堆积
-const shotUpload = multer({
-  storage: multer.memoryStorage(),
+// ==================== 证明图上传（员工提交用，落盘） ====================
+// 员工上传 1 张订单证明图 + N 张打卡证明图，保存到 uploads/dinner-proofs/
+const PROOFS_DIR = path.join(__dirname, '..', 'uploads', 'dinner-proofs');
+if (!fs.existsSync(PROOFS_DIR)) fs.mkdirSync(PROOFS_DIR, { recursive: true });
+const proofStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, PROOFS_DIR),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase() || '.png';
+    const safeExt = ['.png', '.jpg', '.jpeg', '.webp'].includes(ext) ? ext : '.png';
+    cb(null, 'pr_' + crypto.randomBytes(8).toString('hex') + safeExt);
+  }
+});
+const proofUpload = multer({
+  storage: proofStorage,
   limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (/^image\/(png|jpe?g|webp)$/i.test(file.mimetype)) cb(null, true);
-    else cb(new Error('仅支持 PNG/JPG/WEBP 截图'));
+    else cb(new Error('仅支持 PNG/JPG/WEBP 图片'));
   }
 });
 
-router.post('/recognize', (req, res, next) => {
-  shotUpload.single('image')(req, res, (err) => {
-    if (err) {
-      const msg = /LIMIT_FILE_SIZE/.test(err.code || '') ? '截图超过 8MB，请压缩后重试' : (err.message || '图片上传失败');
-      return res.status(400).json({ error: msg, code: 'UPLOAD_ERROR' });
-    }
-    next();
-  });
-}, async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: '请先选择截图' });
-    const kind = req.body && req.body.kind === 'punch' ? 'punch' : 'order';
-    const result = await vision.recognize(req.file.buffer, kind);
-    res.json({
-      success: true, kind,
-      fields: result,
-      configured: true
-    });
-  } catch (e) {
-    const code = e.code || 'VISION_ERROR';
-    const status = code === 'NO_VISION_KEY' ? 503 : (code === 'VISION_INCOMPLETE' ? 422 : 500);
-    res.status(status).json({
-      error: e.message || '识别失败',
-      code,
-      configured: vision.configured()
-    });
-  }
-});
-
-// 前端探测：视觉服务是否已配置
+// 视觉服务配置探测
 router.get('/recognize/status', (req, res) => {
   res.json({
     configured: vision.configured(),
@@ -58,8 +39,7 @@ router.get('/recognize/status', (req, res) => {
   });
 });
 
-// ==================== 凭证上传（multer）====================
-// 凭证图片保存到 backend/uploads/dinner-receipts/，文件名随机
+// ==================== 凭证上传（打款，落盘 uploads/dinner-receipts/） ====================
 const RECEIPTS_DIR = path.join(__dirname, '..', 'uploads', 'dinner-receipts');
 if (!fs.existsSync(RECEIPTS_DIR)) fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
 const receiptStorage = multer.diskStorage({
@@ -98,18 +78,17 @@ function mondayOf(dstr) {
 }
 function fmtM(n) { return (Math.round(n * 10) / 10).toFixed(1); }
 
+// 判定：基于「已确认字段」（人工通过时用员工/修正字段，识别一致时用识别字段）
 function judge(form, ai, records) {
   if (!ai || !ai.orderTime || !ai.punchTime || !ai.orderNo || !(ai.amount > 0)) {
-    return { status: 'FAIL_BLUR', channel: '—', amount: 0, reason: '截图要素缺失：无法识别下单时间/打卡时间/订单号/金额，请重新上传清晰截图' };
+    return { status: 'FAIL_BLUR', channel: '—', amount: 0, reason: '要素缺失：无法确定下单时间/打卡时间/订单号/金额，请人工核实' };
   }
-  if (ai.punchDate && ai.punchDate !== form.date) {
+  if (ai.punchDate && form.date && ai.punchDate !== form.date) {
     return { status: 'FAIL_DATE', channel: '—', amount: 0, reason: '日期不一致：打卡日期(' + ai.punchDate + ')与用餐日期(' + form.date + ')不符' };
   }
-  // 拼单人数（默认 1，即独自下单）
   const shared = Math.max(1, parseInt(form.sharedCount) || 1);
   const wk = mondayOf(form.date);
 
-  // 同一人重复提交同一订单号 → 拒绝（不同人拼单放开，受下方订单总额度限制）
   const selfDup = (records || []).find(r =>
     r.name === form.name && r.ai && r.ai.orderNo === ai.orderNo && r.status && r.status.startsWith('PASS'));
   if (selfDup) {
@@ -126,12 +105,10 @@ function judge(form, ai, records) {
     };
   }
 
-  // 拼单均分：先按「实付 ÷ 拼单人数」计，再套单人 25 元封顶（向下取整，不超发）
   const perHead = Number(ai.amount) / shared;
   let amount = Math.floor(Math.min(perHead, CAP_MEAL) * 10) / 10;
   const cappedMeal = perHead > CAP_MEAL;
 
-  // 订单总额锁：同一订单号已报销合计不得超过实付金额
   const orderClaimed = (records || [])
     .filter(r => r.ai && r.ai.orderNo === ai.orderNo && r.status && r.status.startsWith('PASS'))
     .reduce((s, r) => s + r.amount, 0);
@@ -176,153 +153,262 @@ function judge(form, ai, records) {
   return { status, channel, amount, reason, used, shared, orderClaimed };
 }
 
-// ==================== 员工提交（免登录，同问卷模式） ====================
-router.post('/', async (req, res) => {
-  const { name, dept1, dept2, date, ali, aliname, orderTime, doneTime, orderNo, amount, punchTime, punchDate, sharedCount } = req.body;
+// ==================== 员工提交（免登录，零等待） ====================
+// multipart：表单字段 + 1 张订单证明图(order) + N 张打卡证明图(punch)
+// 提交后只落盘 + 记录，不实时判定；由后台触发识别比对
+router.post('/group', proofUpload.fields([
+  { name: 'order', maxCount: 1 },
+  { name: 'punch', maxCount: 20 }
+]), async (req, res) => {
+  try {
+    const body = req.body || {};
+    const date = (body.date || '').trim();
+    const dept1 = (body.dept1 || '').trim();
+    const dept2 = (body.dept2 || '').trim();
+    const sharedCount = parseInt(body.sharedCount) || 1;
+    const members = JSON.parse(body.members || '[]');
 
-  if (!name) return res.status(400).json({ error: '请填写姓名' });
-  if (!dept1) return res.status(400).json({ error: '请填写一级部门' });
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: '请选择用餐日期' });
-  if (!ali) return res.status(400).json({ error: '请填写支付宝账号（用于转账）' });
-  if (!aliname) return res.status(400).json({ error: '请填写支付宝实名姓名（填真实姓名，勿填小名）' });
-  const shared = Math.max(1, parseInt(sharedCount) || 1);
-  if (shared > 20) return res.status(400).json({ error: '拼单人数不合理，请如实填写' });
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: '请选择用餐日期' });
+    if (!dept1) return res.status(400).json({ error: '请填写一级部门' });
+    if (!Array.isArray(members) || !members.length) return res.status(400).json({ error: '请填写就餐人员' });
+    if (members.length !== sharedCount) {
+      return res.status(400).json({ error: '就餐人数（' + sharedCount + '）与填写的人员数（' + members.length + '）不一致' });
+    }
+    if (sharedCount > 20) return res.status(400).json({ error: '拼单人数不合理' });
 
-  const form = {
-    name: String(name).trim(), dept1: String(dept1).trim(), dept2: String(dept2 || '').trim(),
-    date, ali: String(ali).trim(), aliname: String(aliname).trim(), sharedCount: shared
-  };
-  const ai = {
-    orderTime: (orderTime || '').trim(), doneTime: (doneTime || '').trim(),
-    orderNo: (orderNo || '').trim(), amount: Number(amount) || 0,
-    punchTime: (punchTime || '').trim(), punchDate: (punchDate || '').trim()
-  };
-  const hasAI = ai.orderTime && ai.punchTime && ai.orderNo && ai.amount > 0;
+    const files = req.files || {};
+    const orderImgs = files.order || [];
+    const punchImgs = files.punch || [];
+    if (!orderImgs.length) return res.status(400).json({ error: '请上传 1 张外卖订单证明图' });
+    if (punchImgs.length !== members.length) {
+      return res.status(400).json({ error: '需为每人上传 1 张打卡证明图（共 ' + members.length + ' 张，当前 ' + punchImgs.length + ' 张）' });
+    }
 
-  const data = getData();
-  if (!data.dinnerRecords) data.dinnerRecords = [];
+    const orderImgUrl = '/uploads/dinner-proofs/' + orderImgs[0].filename;
 
-  const result = judge(form, hasAI ? ai : null, data.dinnerRecords);
-  const entry = {
-    id: 'D' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    ...form,
-    ai: hasAI ? ai : {},
-    status: result.status,
-    channel: result.channel,
-    amount: result.amount,
-    reason: result.reason,
-    weekUsed: result.used || 0,
-    sharedCount: shared,
-    orderClaimed: (result.orderClaimed || 0) + (result.amount > 0 ? result.amount : 0),
-    createdAt: new Date().toISOString()
-  };
-  data.dinnerRecords.push(entry);
-  await saveData();
+    // 逐人校验
+    const names = [];
+    for (let i = 0; i < members.length; i++) {
+      const m = members[i] || {};
+      const nm = String(m.name || '').trim();
+      if (!nm) return res.status(400).json({ error: '第 ' + (i + 1) + ' 位同事的姓名未填写' });
+      if (names.includes(nm)) return res.status(400).json({ error: '姓名重复：' + nm + '，请检查' });
+      names.push(nm);
+      if (!String(m.ali || '').trim() || !String(m.aliname || '').trim()) {
+        return res.status(400).json({ error: '请填写 ' + nm + ' 的支付宝账号与实名姓名' });
+      }
+    }
 
-  const pass = result.status.startsWith('PASS');
-  res.json({
-    success: true, id: entry.id, pass,
-    status: result.status, channel: result.channel,
-    amount: result.amount, reason: result.reason,
-    weekUsed: result.used || 0, sharedCount: shared
-  });
+    const data = getData();
+    if (!data.dinnerRecords) data.dinnerRecords = [];
+
+    const batch = [];
+    const groupNo = 'G' + Date.now().toString(36);
+    for (let i = 0; i < members.length; i++) {
+      const m = members[i];
+      // 员工填写的字段（可选填，用于核对）
+      const fields = {
+        orderTime: String(m.orderTime || body.orderTime || '').trim(),
+        doneTime: String(m.doneTime || body.doneTime || '').trim(),
+        orderNo: String(m.orderNo || body.orderNo || '').trim(),
+        amount: Number(m.amount != null ? m.amount : body.amount) || 0,
+        punchTime: String(m.punchTime || '').trim(),
+        punchDate: String(m.punchDate || '').trim()
+      };
+      const entry = {
+        id: 'D' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        name: String(m.name).trim(),
+        dept1, dept2: String(dept2 || '').trim(),
+        date,
+        ali: String(m.ali).trim(),
+        aliname: String(m.aliname).trim(),
+        sharedCount,
+        groupNo,
+        fields,             // 员工填写（待核验）
+        ai: {},             // 识别结果（后台填）
+        orderImg: orderImgUrl,
+        punchImg: '/uploads/dinner-proofs/' + punchImgs[i].filename,
+        reviewStatus: 'pendingVerify',   // pendingVerify 待识别比对 | pendingManual 待人工审核 | verified 已通过 | rejected 已驳回
+        verifyInfo: null,   // 比对结果说明
+        status: null, channel: null, amount: 0, reason: null, weekUsed: 0, orderClaimed: 0,
+        createdAt: new Date().toISOString()
+      };
+      batch.push(entry);
+    }
+
+    data.dinnerRecords.push(...batch);
+    await saveData();
+
+    res.json({
+      success: true, groupNo, sharedCount: members.length,
+      submitted: batch.length,
+      message: '提交成功，待后台审核'
+    });
+  } catch (e) {
+    // 清理已上传文件
+    const files = (req.files || {});
+    Object.values(files).flat().forEach(f => { try { fs.unlinkSync(f.path); } catch (_) {} });
+    if (e && e.type === 'entity.parse.failed') return res.status(400).json({ error: '提交数据格式错误，请刷新后重试' });
+    res.status(500).json({ error: (e && e.message) || '提交失败' });
+  }
 });
 
-// ==================== 拼单批量提交（免登录） ====================
-// 场景：一人点单付款，收齐大家的打卡截图后一次性提交
-// body: { date, dept1, dept2, sharedCount, order:{orderTime,doneTime,orderNo,amount},
-//        members:[{name, punchTime, punchDate, ali, aliname}, ...] }
-router.post('/group', async (req, res) => {
-  const { date, dept1, dept2, sharedCount, order, members } = req.body || {};
-
-  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: '请选择用餐日期' });
-  if (!dept1) return res.status(400).json({ error: '请填写一级部门' });
-  if (!order || !order.orderTime || !order.orderNo || !(Number(order.amount) > 0)) {
-    return res.status(400).json({ error: '订单截图识别失败，请重新上传清晰的外卖订单截图' });
-  }
-  const n = Math.max(1, parseInt(sharedCount) || 1);
-  if (!Array.isArray(members) || !members.length) return res.status(400).json({ error: '请填写就餐人员' });
-  if (members.length !== n) {
-    return res.status(400).json({ error: '就餐人数（' + n + '）与填写的人员数（' + members.length + '）不一致' });
-  }
-
-  // 逐人校验
-  const names = [];
-  for (let i = 0; i < members.length; i++) {
-    const m = members[i] || {};
-    const nm = String(m.name || '').trim();
-    if (!nm) return res.status(400).json({ error: '第 ' + (i + 1) + ' 位同事的姓名未填写' });
-    if (names.includes(nm)) return res.status(400).json({ error: '姓名重复：' + nm + '，请检查' });
-    names.push(nm);
-    if (!m.punchTime || !m.punchDate) {
-      return res.status(400).json({ error: nm + ' 的打卡截图识别失败，请重新上传' });
-    }
-    if (!String(m.ali || '').trim() || !String(m.aliname || '').trim()) {
-      return res.status(400).json({ error: '请填写 ' + nm + ' 的支付宝账号与实名姓名' });
-    }
-  }
-
+// ==================== 后台触发识别比对（单条） ====================
+// 读员工填写的 orderImg + punchImg，识别实际时间，与员工填写比对：
+//   一致 → 自动判定（verified + PASS/FAIL）
+//   不一致/识别失败/未填写 → pendingManual（待人工审核）
+router.post('/records/:id/recognize', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
   const data = getData();
-  if (!data.dinnerRecords) data.dinnerRecords = [];
-
-  // 逐人判定；本批已处理的人也要计入订单总额锁与同人重复校验
-  const batch = [];
-  const results = [];
-  for (const m of members) {
-    const form = {
-      name: String(m.name).trim(),
-      dept1: String(dept1).trim(),
-      dept2: String(dept2 || '').trim(),
-      date,
-      ali: String(m.ali).trim(),
-      aliname: String(m.aliname).trim(),
-      sharedCount: n
-    };
-    const ai = {
-      orderTime: String(order.orderTime).trim(),
-      doneTime: String(order.doneTime || order.orderTime).trim(),
-      orderNo: String(order.orderNo).trim(),
-      amount: Number(order.amount),
-      punchTime: String(m.punchTime).trim(),
-      punchDate: String(m.punchDate).trim()
-    };
-    const result = judge(form, ai, data.dinnerRecords.concat(batch));
-    const entry = {
-      id: 'D' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      ...form,
-      ai,
-      status: result.status,
-      channel: result.channel,
-      amount: result.amount,
-      reason: result.reason,
-      weekUsed: result.used || 0,
-      sharedCount: n,
-      groupNo: 'G' + Date.now().toString(36),
-      orderClaimed: (result.orderClaimed || 0) + (result.amount > 0 ? result.amount : 0),
-      createdAt: new Date().toISOString()
-    };
-    batch.push(entry);
-    results.push({
-      name: entry.name, id: entry.id, pass: result.status.startsWith('PASS'),
-      status: result.status, channel: result.channel, amount: result.amount,
-      reason: result.reason, weekUsed: result.used || 0
+  const r = (data.dinnerRecords || []).find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: '记录不存在' });
+  if (r.reviewStatus === 'verified' || r.reviewStatus === 'rejected') {
+    return res.status(400).json({ error: '该记录已核验，无需重复识别' });
+  }
+  try {
+    const out = await recognizeOne(data, r);
+    await saveData();
+    return res.json({ success: true, id: r.id, ...out, configured: vision.configured() });
+  } catch (e) {
+    // 识别异常 → 待人工审核，保留信息
+    const code = e.code || 'VISION_ERROR';
+    r.reviewStatus = 'pendingManual';
+    r.verifyInfo = { matched: false, error: e.message, differences: ['识别失败：' + (e.message || '')], decidedAt: new Date().toISOString() };
+    await saveData().catch(() => {});
+    res.status(code === 'NO_VISION_KEY' ? 503 : 200).json({
+      success: false, id: r.id, reviewStatus: 'pendingManual',
+      matched: false, error: e.message, code,
+      configured: vision.configured()
     });
   }
+});
 
-  // 同一批共享 groupNo，便于后台追溯
-  const groupNo = batch.length ? batch[0].groupNo : null;
-  batch.forEach(b => { b.groupNo = groupNo; });
-
-  data.dinnerRecords.push(...batch);
+// ==================== 整单识别（同一 groupNo 批量） ====================
+router.post('/group/:groupNo/recognize', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
+  const data = getData();
+  const records = (data.dinnerRecords || []).filter(x => x.groupNo === req.params.groupNo && (x.reviewStatus === 'pendingVerify' || x.reviewStatus === 'pendingManual'));
+  if (!records.length) return res.status(404).json({ error: '未找到待核验的整单记录' });
+  const results = [];
+  for (const r of records) {
+    try {
+      const out = await recognizeOne(data, r);
+      results.push({ id: r.id, name: r.name, ok: true, ...out });
+    } catch (e) {
+      r.reviewStatus = 'pendingManual';
+      r.verifyInfo = { matched: false, error: e.message, differences: ['识别失败：' + (e.message || '')], decidedAt: new Date().toISOString() };
+      results.push({ id: r.id, name: r.name, ok: false, error: e.message });
+    }
+  }
   await saveData();
+  res.json({ success: true, count: records.length, results });
+});
 
-  const passCount = results.filter(r => r.pass).length;
+async function recognizeOne(data, r) {
+  const PROOF_DIR = PROOFS_DIR;
+  const abs = url => url ? path.join(__dirname, '..', url.replace(/^\//, '')) : null;
+  const orderPath = abs(r.orderImg);
+  const orderAI = fs.existsSync(orderPath) ? await vision.recognize(fs.readFileSync(orderPath), 'order') : null;
+  const punchPath = abs(r.punchImg);
+  const punchAI = fs.existsSync(punchPath) ? await vision.recognize(fs.readFileSync(punchPath), 'punch') : null;
+  const ai = {
+    orderTime: orderAI ? orderAI.orderTime : null,
+    doneTime: orderAI ? (orderAI.doneTime || orderAI.orderTime) : null,
+    orderNo: orderAI ? orderAI.orderNo : null,
+    amount: orderAI ? orderAI.amount : null,
+    punchTime: punchAI ? punchAI.punchTime : null,
+    punchDate: punchAI ? punchAI.punchDate : null,
+    orderConfidence: orderAI ? orderAI.confidence : null,
+    punchConfidence: punchAI ? punchAI.confidence : null
+  };
+  r.ai = ai;
+  const f = r.fields || {};
+  const mismatch = [];
+  // 通用比对：日期走字符串比较；时间走分钟比较（±3 分钟容差）
+  const cmpTime = (filled, aiVal, label) => {
+    if (!filled && !aiVal) return null;
+    if (filled && !aiVal) { mismatch.push(label + '：员工填写 ' + filled + '，截图识别不出'); return false; }
+    if (!filled && aiVal) { mismatch.push(label + '：员工未填写，截图识别为 ' + aiVal); return false; }
+    const isTime = /^\d{1,2}:\d{2}$/.test(filled) && /^\d{1,2}:\d{2}$/.test(aiVal);
+    if (isTime) {
+      const fmin = toMin(filled), amin = toMin(aiVal);
+      if (Math.abs(fmin - amin) > 3) { mismatch.push(label + '：员工填写 ' + filled + '，截图识别 ' + aiVal); return false; }
+    } else {
+      if (String(filled).trim() !== String(aiVal).trim()) { mismatch.push(label + '：员工填写 ' + filled + '，截图识别 ' + aiVal); return false; }
+    }
+    return true;
+  };
+  let matched = true;
+  if (r.punchImg) { if (!cmpTime(f.punchTime, ai.punchTime, '打卡时间')) matched = false; if (!cmpTime(f.punchDate, ai.punchDate, '打卡日期')) matched = false; }
+  if (r.orderImg) {
+    if (!cmpTime(f.orderTime, ai.orderTime, '下单时间')) matched = false;
+    if (f.orderNo && ai.orderNo && String(f.orderNo).trim() !== String(ai.orderNo).trim()) { mismatch.push('订单号：员工 ' + f.orderNo + ' / 识别 ' + ai.orderNo); matched = false; }
+    if (f.amount && ai.amount && Math.abs(Number(f.amount) - Number(ai.amount)) > 0.5) { mismatch.push('金额：员工 ' + f.amount + ' / 识别 ' + ai.amount); matched = false; }
+  }
+  if (!matched) {
+    r.reviewStatus = 'pendingManual';
+    r.verifyInfo = { matched: false, differences: mismatch, decidedAt: new Date().toISOString() };
+    return { matched: false, reviewStatus: 'pendingManual', differences: mismatch, ai };
+  }
+  const finalAI = {
+    orderTime: ai.orderTime || f.orderTime, doneTime: ai.doneTime, orderNo: ai.orderNo || f.orderNo,
+    amount: ai.amount || Number(f.amount) || 0, punchTime: ai.punchTime || f.punchTime, punchDate: ai.punchDate || f.punchDate
+  };
+  const result = judge(r, finalAI, data.dinnerRecords);
+  r.status = result.status; r.channel = result.channel; r.amount = result.amount;
+  r.reason = result.reason; r.weekUsed = result.used || 0;
+  r.orderClaimed = (result.orderClaimed || 0) + (result.amount > 0 ? result.amount : 0);
+  r.reviewStatus = 'verified';
+  r.verifyInfo = { matched: true, decidedAt: new Date().toISOString(), note: '员工填写与截图识别一致，自动判定' };
+  return { matched: true, reviewStatus: 'verified', status: r.status, channel: r.channel, amount: r.amount, ai };
+}
+
+// ==================== 人工审核（管理员核验通过/驳回） ====================
+// body: { action: 'approve' | 'reject', fields?: {orderTime, doneTime, orderNo, amount, punchTime, punchDate}, note? }
+router.post('/records/:id/manual-review', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
+  const data = getData();
+  const r = (data.dinnerRecords || []).find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: '记录不存在' });
+  const action = req.body && req.body.action;
+  if (action !== 'approve' && action !== 'reject') return res.status(400).json({ error: 'action 需为 approve 或 reject' });
+
+  if (action === 'reject') {
+    r.reviewStatus = 'rejected';
+    r.status = 'FAIL_MANUAL';
+    r.reason = (req.body && req.body.note) || '人工审核不通过';
+    r.verifyInfo = { matched: false, decidedAt: new Date().toISOString(), note: r.reason };
+    await saveData();
+    return res.json({ success: true, id: r.id, reviewStatus: 'rejected', status: r.status });
+  }
+
+  // approve：管理员可修正字段，然后正式判定
+  const override = (req.body && req.body.fields) || {};
+  const f = r.fields || {};
+  const finalAI = {
+    orderTime: (override.orderTime != null ? String(override.orderTime) : (f.orderTime || (r.ai && r.ai.orderTime) || '')).trim(),
+    doneTime: (override.doneTime != null ? String(override.doneTime) : (f.doneTime || (r.ai && r.ai.doneTime) || '')).trim(),
+    orderNo: (override.orderNo != null ? String(override.orderNo) : (f.orderNo || (r.ai && r.ai.orderNo) || '')).trim(),
+    amount: Number(override.amount != null ? override.amount : (f.amount || (r.ai && r.ai.amount) || 0)),
+    punchTime: (override.punchTime != null ? String(override.punchTime) : (f.punchTime || (r.ai && r.ai.punchTime) || '')).trim(),
+    punchDate: (override.punchDate != null ? String(override.punchDate) : (f.punchDate || (r.ai && r.ai.punchDate) || r.date)).trim()
+  };
+  if (finalAI.punchDate && !finalAI.punchDate.includes('-') && r.date) finalAI.punchDate = r.date;
+
+  const result = judge(r, finalAI, data.dinnerRecords);
+  r.status = result.status;
+  r.channel = result.channel;
+  r.amount = result.amount;
+  r.reason = result.reason;
+  r.weekUsed = result.used || 0;
+  r.orderClaimed = (result.orderClaimed || 0) + (result.amount > 0 ? result.amount : 0);
+  r.reviewStatus = 'verified';
+  r.verifyInfo = {
+    matched: true, decidedAt: new Date().toISOString(),
+    note: '人工审核通过' + ((req.body && req.body.note) ? '（' + req.body.note + '）' : ''),
+    finalTime: finalAI.orderTime, finalPunch: finalAI.punchTime
+  };
+  await saveData();
   res.json({
-    success: true, groupNo, sharedCount: n,
-    perHead: Math.floor(Math.min(Number(order.amount) / n, 25) * 10) / 10,
-    totalAmount: results.reduce((s, r) => s + r.amount, 0),
-    passCount, failCount: results.length - passCount,
-    results
+    success: true, id: r.id, reviewStatus: 'verified',
+    status: r.status, channel: r.channel, amount: r.amount, reason: r.reason
   });
 });
 
@@ -347,7 +433,6 @@ router.delete('/records/:id', authMiddleware, requireRole('admin', 'hr'), async 
 });
 
 // ==================== 打款：单条 ====================
-// 管理员上传打款凭证（图片，可选 note 备注），标记记录为已打款
 router.post('/records/:id/pay', authMiddleware, requireRole('admin', 'hr'),
   receiptUpload.single('receipt'), async (req, res) => {
     const data = getData();
@@ -370,7 +455,6 @@ router.post('/records/:id/pay', authMiddleware, requireRole('admin', 'hr'),
 );
 
 // ==================== 打款：批量（一次性给一人多笔） ====================
-// ids 用逗号分隔；上传一张凭证对应一次支付宝转账；同一批次记录共享 paidBatchId
 router.post('/records/batch-pay', authMiddleware, requireRole('admin', 'hr'),
   receiptUpload.single('receipt'), async (req, res) => {
     const idsRaw = (req.body && req.body.ids || '').toString();
@@ -414,7 +498,6 @@ router.post('/records/:id/unpay', authMiddleware, requireRole('admin', 'hr'), as
   r.paid = false;
   r.paidAt = null;
   r.paidBy = null;
-  // 不删 paidBatchId / paidReceipt，留作历史
   await saveData();
   res.json({ success: true, id: r.id, paid: false });
 });

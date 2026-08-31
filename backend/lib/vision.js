@@ -72,6 +72,12 @@ const DEFAULT_MODEL = 'glm-4.6v-flash';
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function recognize(imageBuffer, kind) {
+  // 测试模式：MOCK_VISION=1 时返回固定结果（用于端到端验证，不上线）
+  if (process.env.MOCK_VISION === '1') {
+    return kind === 'punch'
+      ? { model: 'mock', confidence: 95, punchDate: '2026-08-28', punchTime: '21:10', raw: { punchDate: '2026-08-28', punchTime: '21:10' } }
+      : { model: 'mock', confidence: 95, orderTime: '19:42', doneTime: '20:05', orderNo: 'MT20260828A102', amount: 46.5, raw: { orderTime: '19:42', orderNo: 'MT20260828A102', amount: 46.5 } };
+  }
   const apiKey = process.env.VISION_API_KEY;
   const baseUrl = process.env.VISION_BASE_URL || DEFAULT_BASE_URL;
   const model = process.env.VISION_MODEL || DEFAULT_MODEL;

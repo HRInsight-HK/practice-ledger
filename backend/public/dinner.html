@@ -29,36 +29,32 @@
   .btn{display:block; width:100%; padding:12px; background:var(--blue); color:#fff; border:none; border-radius:8px; font-size:15px; cursor:pointer; font-weight:600;}
   .btn:hover{opacity:.92;}
   .btn.small{display:inline-block; width:auto; padding:6px 14px; font-size:12.5px; font-weight:500;}
-  .ai-box{background:var(--blue-bg); border:1px solid #bfdbfe; border-radius:var(--r); padding:12px;}
-  .ai-note{font-size:11.5px; color:var(--sub); margin-top:8px;}
-  .up{border:1.5px dashed var(--line); border-radius:var(--r); padding:12px; text-align:center; color:var(--sub); font-size:12.5px; background:#fafbfc;}
-  .up img{max-width:100%; max-height:140px; border-radius:6px; margin-top:6px;}
+  .up{border:1.5px dashed var(--line); border-radius:var(--r); padding:12px; text-align:center; color:var(--sub); font-size:12.5px; background:#fafbfc; cursor:pointer;}
+  .up:hover{border-color:var(--blue); color:var(--blue);}
+  .up img{max-width:100%; max-height:160px; border-radius:6px; margin-top:6px; display:block;}
+  .up.has-img{border-style:solid; border-color:#a7f3d0; background:var(--green-bg); color:var(--green);}
   .result{border-radius:var(--r); padding:14px; margin-top:12px; display:none;}
   .result.ok{display:block; background:var(--green-bg); border:1px solid #a7f3d0;}
   .result.no{display:block; background:var(--red-bg); border:1px solid #fecaca;}
   .result h4{font-size:15px; margin-bottom:6px;}
   .result.ok h4{color:var(--green);} .result.no h4{color:var(--red);}
-  .result ul{list-style:none;} .result li{padding:2px 0; font-size:13px;}
-  .notice{background:#f3f4f6; border-radius:10px; padding:11px 13px; margin-top:12px; font-size:12.5px; white-space:pre-wrap; display:none;}
-  .notice.show{display:block;}
-  .notice .t{font-size:11px; color:var(--sub); margin-bottom:4px;}
+  .result p{font-size:13px;}
   .err{background:var(--red-bg); border:1px solid #fecaca; color:var(--red); border-radius:8px; padding:9px 12px; font-size:13px; margin-top:12px; display:none;}
   .err.show{display:block;}
   .tip{background:var(--amber-bg); border:1px solid #fde68a; border-radius:var(--r); padding:9px 12px; font-size:12px; color:#92400e; margin-bottom:12px;}
-  .loading{display:inline-block; width:13px; height:13px; border:2px solid var(--blue); border-top-color:transparent; border-radius:50%; animation:spin .8s linear infinite; vertical-align:-2px; margin-right:5px;}
-  @keyframes spin{to{transform:rotate(360deg);}}
   .steps{font-size:12.5px; color:var(--sub); background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:9px 13px; margin-bottom:12px;}
   .steps b{color:var(--blue);}
+  .opt{font-size:11px; color:var(--sub); margin-top:3px;}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>🧾 工作日加班晚餐报销登记</h1>
-    <div class="desc">提交后 AI 自动审核，结果即时反馈 · 报销款随本周结算支付宝转账</div>
+    <div class="desc">提交后由后台审核，无需等待 · 报销款随本周结算支付宝转账</div>
   </header>
 
-  <div class="steps">提交流程：<b>①</b> 选人数、填姓名 → <b>②</b> 传 1 张订单截图 → <b>③</b> 传 N 张打卡截图（各自对应到人）→ <b>④</b> 填每人支付宝 → 提交</div>
+  <div class="steps">提交流程：<b>①</b> 选人数、填姓名 → <b>②</b> 填订单信息 → <b>③</b> 传 1 张订单证明图 + N 张打卡证明图 → <b>④</b> 填每人支付宝 → 提交</div>
 
   <div class="rules">
     <div class="rule"><b>19:30</b><span>外卖下单 ≥ 19:30 直接可报</span></div>
@@ -66,6 +62,8 @@
     <div class="rule"><b>25 元</b><span>单餐封顶</span></div>
     <div class="rule"><b>100 元</b><span>每人每周累计封顶</span></div>
   </div>
+
+  <div class="tip">💡 请<b>如实填写下单/打卡信息</b>并上传对应证明截图。后台会核对「你填写的时间」与「截图里识别出的时间」是否一致，一致自动通过；不一致或看不清楚会转人工复核，请勿虚报。</div>
 
   <div class="card">
     <h3>① 本单信息与就餐人员</h3>
@@ -82,64 +80,56 @@
       <div><label>二级部门（选填）</label><input id="f-dept2" placeholder="如：行政一组"></div>
       <div><label>用餐日期 <em>*</em></label><input type="date" id="f-date"></div>
     </div>
-    <div class="ai-note" style="margin-top:10px;">就餐人员姓名（按人数填写，用于分摊与打卡匹配）：</div>
+    <div class="opt" style="margin-top:10px;">就餐人员姓名（按人数填写，用于分摊与匹配）：</div>
     <div id="member-names" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:6px;"></div>
   </div>
 
   <div class="card">
-    <h3>② 外卖订单截图（1 张，全单共用）</h3>
-    <div class="up" onclick="document.getElementById('file-order').click()">📷 上传外卖订单完成截图<br>（需含下单时间、订单号、实付金额）<img id="prev-order" style="display:none"><input type="file" id="file-order" accept="image/*" hidden></div>
-    <div id="order-status" style="font-size:12px;color:var(--sub);margin-top:8px;">等待上传</div>
-    <div class="grid2" style="margin-top:10px;">
-      <div><label>外卖下单时间</label><input id="ai-order" placeholder="自动识别" readonly></div>
-      <div><label>订单完成时间</label><input id="ai-done" placeholder="自动识别" readonly></div>
-      <div><label>订单号</label><input id="ai-no" placeholder="自动识别" readonly></div>
-      <div><label>实付金额（元）</label><input id="ai-amount" type="number" step="0.1" placeholder="自动识别" readonly></div>
+    <h3>② 外卖订单信息（本单共用）</h3>
+    <div class="grid2">
+      <div><label>外卖下单时间 <em>*</em></label><input id="oi-order" placeholder="如 19:42"></div>
+      <div><label>订单完成时间（选填）</label><input id="oi-done" placeholder="如 20:05"></div>
+      <div><label>订单号 <em>*</em></label><input id="oi-no" placeholder="如 MT20260828A102"></div>
+      <div><label>实付金额（元）<em>*</em></label><input id="oi-amount" type="number" step="0.1" placeholder="如 46.5"></div>
     </div>
-    <div id="per-head" style="margin-top:10px;font-size:13px;color:var(--sub);"></div>
+    <div class="opt" style="margin-top:8px;">⚠️ 请务必与下方订单证明图一致，后台会核对。</div>
   </div>
 
   <div class="card">
-    <h3>③ 下班打卡截图（每人 1 张，需对应到人）</h3>
+    <h3>③ 证明截图（每人各 1 张打卡图 + 1 张共用订单图）</h3>
+    <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px;background:#fafbfc;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <b style="font-size:13px;min-width:110px;">📄 订单证明图</b>
+        <button class="btn small ghost" onclick="document.getElementById('order-file').click()">上传订单截图</button>
+        <input type="file" id="order-file" accept="image/*" hidden onchange="preview(this,'order-prev','order-zone')">
+      </div>
+      <div class="up" id="order-zone" onclick="document.getElementById('order-file').click()">📷 上传外卖订单完成截图（需含下单时间、订单号、实付金额）<img id="order-prev" style="display:none"></div>
+    </div>
     <div id="punch-list"></div>
-    <div class="ai-note">🔒 打卡日期与时间由 AI 自动提取；每张截图请在下拉框中确认是<b>哪位同事</b>的打卡。</div>
+    <div class="opt">每张打卡证明图请确认是<b>哪位同事</b>的（下拉框对应到人）。</div>
   </div>
 
   <div class="card">
     <h3>④ 收款信息（每人）</h3>
     <div id="pay-list"></div>
-    <div class="tip" style="margin-top:10px;">💡 请填<b>真实姓名</b>，姓名与账号不符转账会退回；收款人姓名将与花名册核对。</div>
+    <div class="tip" style="margin-top:10px;">💡 请填<b>真实姓名</b>，姓名与账号不符转账会退回。</div>
   </div>
 
-  <button class="btn" id="btn-submit" onclick="submitGroup()">提交审核</button>
+  <button class="btn" id="btn-submit" onclick="submitGroup()">提交</button>
 
   <div class="err" id="err"></div>
   <div class="result" id="result"></div>
-  <div class="notice" id="notice"><div class="t">—— 企微「人事行政小助手」将推送 ——</div><div id="notice-body"></div></div>
 </div>
 
 <script>
 const API = location.origin.startsWith('http') && !location.origin.includes('localhost') && !location.origin.includes('127.0.0.1')
   ? location.origin + '/api/dinner' : '/api/dinner';
 
-let VISION_OK = null;
-const ORDER = { ok:false, fields:null };
-const PUNCH = {};   // idx -> {ok, punchTime, punchDate, owner}
-
 document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
-
-// 探测视觉服务
-fetch(API + '/recognize/status').then(r=>r.json()).then(j=>{
-  VISION_OK = !!j.configured;
-  if(!VISION_OK){
-    document.getElementById('order-status').innerHTML =
-      '<span style="color:var(--red)">⚠️ 视觉识别服务未配置，请联系管理员</span>';
-  }
-}).catch(()=>{ VISION_OK = false; });
+const PUNCH_IMG = {};   // idx -> {name, ownerIndex, previewUrl, file}
 
 function n(){ return parseInt(document.getElementById('f-shared').value)||1; }
 
-// ① 就餐人员姓名 + ③ 打卡位 + ④ 收款位
 function renderMembers(){
   const cnt = n();
   const namesEl = document.getElementById('member-names');
@@ -160,12 +150,12 @@ function renderMembers(){
        + '<button class="btn small ghost" onclick="pickPunch('+i+')">📷 上传打卡截图</button>'
        + '<input type="file" id="punch-file-'+i+'" accept="image/*" hidden onchange="onPunch('+i+',this)">'
        + '</div>'
-       + '<div id="punch-status-'+i+'" style="font-size:12px;color:var(--sub);margin-top:6px;">等待上传</div>'
-       + '<img id="punch-prev-'+i+'" style="display:none;max-width:100%;max-height:140px;border-radius:6px;margin-top:6px;">'
        + '<div class="grid2" style="margin-top:8px;">'
-       + '<div><label>打卡日期</label><input id="punch-date-'+i+'" type="date" readonly></div>'
-       + '<div><label>打卡时间</label><input id="punch-time-'+i+'" readonly></div>'
-       + '</div></div>';
+       + '<div><label>打卡日期</label><input class="m-pdate" data-idx="'+i+'" type="date"></div>'
+       + '<div><label>打卡时间</label><input class="m-ptime" data-idx="'+i+'" placeholder="如 21:10"></div>'
+       + '</div>'
+       + '<div class="up" id="punch-zone-'+i+'" style="margin-top:8px;" onclick="pickPunch('+i+')">📷 上传打卡证明图<img id="punch-prev-'+i+'" style="display:none"></div>'
+       + '</div>';
     yh += '<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;background:#fafbfc;">'
        + '<div id="pay-title-'+i+'" style="font-size:13px;font-weight:600;margin-bottom:6px;">第 '+(i+1)+' 位收款信息</div>'
        + '<div class="grid2">'
@@ -177,7 +167,8 @@ function renderMembers(){
   punchEl.innerHTML = ph;
   payEl.innerHTML = yh;
   syncOwners();
-  updatePerHead();
+  // 保留已选打卡图
+  Object.keys(PUNCH_IMG).forEach(k=>{ if(PUNCH_IMG[k]&&PUNCH_IMG[k].previewUrl){ const img=document.getElementById('punch-prev-'+k); const zn=document.getElementById('punch-zone-'+k); if(img){img.src=PUNCH_IMG[k].previewUrl;img.style.display='block';} if(zn) zn.classList.add('has-img'); } });
 }
 
 function syncOwners(){
@@ -187,7 +178,6 @@ function syncOwners(){
     sel.innerHTML = names.map((nm,k)=>'<option value="'+k+'"'+(String(k)===cur?' selected':'')+'>'+nm+'</option>').join('');
     if(cur===''||cur==null) sel.value=String(i);
   });
-  // 收款区标题同步
   document.querySelectorAll('#pay-list > div').forEach((d,k)=>{
     const t=d.querySelector('div'); if(t) t.textContent='第 '+(k+1)+' 位收款信息'+(names[k]&&names[k].indexOf('第 ')===0?'':'（'+names[k]+'）');
   });
@@ -198,70 +188,37 @@ function pickPunch(i){ document.getElementById('punch-file-'+i).click(); }
 
 function onPunch(i, input){
   const f=input.files[0]; if(!f) return;
-  const st=document.getElementById('punch-status-'+i);
   const img=document.getElementById('punch-prev-'+i);
+  const zn=document.getElementById('punch-zone-'+i);
   const rd=new FileReader();
-  rd.onload=()=>{ img.src=rd.result; img.style.display='block'; };
+  rd.onload=()=>{ img.src=rd.result; img.style.display='block'; zn.classList.add('has-img'); };
   rd.readAsDataURL(f);
-  PUNCH[i]={ok:false};
-  st.innerHTML='<span class="loading"></span>识别中…';
-  const fd=new FormData(); fd.append('image',f); fd.append('kind','punch');
-  fetch(API+'/recognize',{method:'POST',body:fd}).then(r=>r.json().then(j=>({ok:r.ok,j}))).then(({ok,j})=>{
-    if(!ok){ st.innerHTML='<span style="color:var(--red)">✗ '+(j.error||'识别失败')+'</span>';
-      document.getElementById('punch-date-'+i).value=''; document.getElementById('punch-time-'+i).value=''; return; }
-    const f2=j.fields||{};
-    document.getElementById('punch-date-'+i).value=f2.punchDate||'';
-    document.getElementById('punch-time-'+i).value=f2.punchTime||'';
-    PUNCH[i]={ok:true, punchDate:f2.punchDate, punchTime:f2.punchTime};
-    st.innerHTML='<span style="color:var(--green)">✓ 识别完成'+(f2.confidence!=null?'（置信度 '+f2.confidence+'%）':'')+'</span>';
-  }).catch(()=>{ st.innerHTML='<span style="color:var(--red)">✗ 网络错误</span>'; });
+  PUNCH_IMG[i]={file:f, previewUrl:null};
+  // 预览
+  const rd2=new FileReader(); rd2.onload=()=>{ PUNCH_IMG[i].previewUrl=rd2.result; img.src=rd2.result; img.style.display='block'; zn.classList.add('has-img'); }; rd2.readAsDataURL(f);
 }
 
-// ② 订单截图
-document.getElementById('file-order').onchange = e=>{
-  const f=e.target.files[0]; if(!f) return;
-  const st=document.getElementById('order-status');
-  const img=document.getElementById('prev-order');
-  const rd=new FileReader(); rd.onload=()=>{ img.src=rd.result; img.style.display='block'; }; rd.readAsDataURL(f);
-  ORDER.ok=false;
-  st.innerHTML='<span class="loading"></span>识别中…';
-  const fd=new FormData(); fd.append('image',f); fd.append('kind','order');
-  fetch(API+'/recognize',{method:'POST',body:fd}).then(r=>r.json().then(j=>({ok:r.ok,j}))).then(({ok,j})=>{
-    if(!ok){ st.innerHTML='<span style="color:var(--red)">✗ '+(j.error||'识别失败')+'</span>';
-      ['ai-order','ai-done','ai-no','ai-amount'].forEach(i=>document.getElementById(i).value=''); updatePerHead(); return; }
-    const f2=j.fields||{};
-    document.getElementById('ai-order').value=f2.orderTime||'';
-    document.getElementById('ai-done').value=f2.doneTime||'';
-    document.getElementById('ai-no').value=f2.orderNo||'';
-    document.getElementById('ai-amount').value=(f2.amount==null?'':f2.amount);
-    ORDER.ok=true; ORDER.fields=f2;
-    st.innerHTML='<span style="color:var(--green)">✓ 识别完成'+(f2.confidence!=null?'（置信度 '+f2.confidence+'%）':'')+'</span>';
-    updatePerHead();
-  }).catch(()=>{ st.innerHTML='<span style="color:var(--red)">✗ 网络错误</span>'; });
-};
-
-function updatePerHead(){
-  const el=document.getElementById('per-head');
-  const amt=parseFloat(document.getElementById('ai-amount').value)||0;
-  if(!amt||!ORDER.ok){ el.textContent=''; return; }
-  const cnt=n();
-  const per=Math.floor(Math.min(amt/cnt,25)*10)/10;
-  el.innerHTML='💰 本单实付 <b>'+amt.toFixed(1)+'</b> 元 ÷ <b>'+cnt+'</b> 人 = 每人可报 <b style="color:var(--blue)">'+per.toFixed(1)+' 元</b>（单餐封顶 25 元）';
+function preview(input, imgId, zoneId){
+  const f=input.files[0]; if(!f) return;
+  const img=document.getElementById(imgId);
+  const zn=document.getElementById(zoneId);
+  const rd=new FileReader();
+  rd.onload=()=>{ img.src=rd.result; img.style.display='block'; zn.classList.add('has-img'); zn.style.display='block'; };
+  rd.readAsDataURL(f);
 }
 
 function collect(){
   const names=[...document.querySelectorAll('.m-name')].map(i=>i.value.trim());
   const owners=[...document.querySelectorAll('.punch-owner')].map(s=>parseInt(s.value));
   const cnt=n();
-  // 按 owner（人员序号）归集打卡结果
   const members=[];
   for(let k=0;k<cnt;k++){
-    const idx=owners.indexOf(k);           // 哪张截图归这个人
-    const p=idx>=0?PUNCH[idx]:null;
+    const idx=owners.indexOf(k);           // 哪张打卡图归这个人
     members.push({
       name:names[k]||'',
-      punchTime:p&&p.ok?p.punchTime:'',
-      punchDate:p&&p.ok?p.punchDate:'',
+      punchTime:(document.querySelector('.m-ptime[data-idx="'+k+'"]')||{}).value||'',
+      punchDate:(document.querySelector('.m-pdate[data-idx="'+k+'"]')||{}).value||'',
+      punchFile: (idx>=0 && PUNCH_IMG[idx] && PUNCH_IMG[idx].file) || null,
       ali:(document.querySelector('.m-ali[data-idx="'+k+'"]')||{}).value||'',
       aliname:(document.querySelector('.m-aliname[data-idx="'+k+'"]')||{}).value||''
     });
@@ -274,50 +231,63 @@ function submitGroup(){
   const date=document.getElementById('f-date').value;
   const dept1=document.getElementById('f-dept1').value.trim();
   const dept2=document.getElementById('f-dept2').value.trim();
+  const orderTime=document.getElementById('oi-order').value.trim();
+  const doneTime=document.getElementById('oi-done').value.trim();
+  const orderNo=document.getElementById('oi-no').value.trim();
+  const amount=document.getElementById('oi-amount').value;
+
   if(!dept1){ err.textContent='请填写一级部门'; err.className='err show'; return; }
   if(!date){ err.textContent='请选择用餐日期'; err.className='err show'; return; }
-  if(!ORDER.ok){ err.textContent='请先上传外卖订单截图并完成识别'; err.className='err show'; return; }
+  if(!orderTime){ err.textContent='请填写外卖下单时间'; err.className='err show'; return; }
+  if(!orderNo){ err.textContent='请填写订单号'; err.className='err show'; return; }
+  if(!amount){ err.textContent='请填写实付金额'; err.className='err show'; return; }
+
+  const orderFile=document.getElementById('order-file').files[0];
+  if(!orderFile){ err.textContent='请上传 1 张外卖订单证明截图'; err.className='err show'; return; }
 
   const members=collect();
   for(let i=0;i<members.length;i++){
     const m=members[i];
     if(!m.name){ err.textContent='请填写第 '+(i+1)+' 位同事的姓名'; err.className='err show'; return; }
-    if(!m.punchTime||!m.punchDate){ err.textContent=m.name+' 的打卡截图未识别成功，请重新上传'; err.className='err show'; return; }
-    if(m.punchDate!==date){ err.textContent=m.name+' 的打卡日期（'+m.punchDate+'）与用餐日期（'+date+'）不一致'; err.className='err show'; return; }
+    if(!m.punchFile){ err.textContent='请为 '+m.name+' 上传 1 张打卡证明截图'; err.className='err show'; return; }
     if(!m.ali.trim()||!m.aliname.trim()){ err.textContent='请填写 '+m.name+' 的支付宝账号与实名姓名'; err.className='err show'; return; }
   }
 
-  const btn=document.getElementById('btn-submit'); btn.disabled=true; btn.textContent='审核中…';
-  fetch(API+'/group',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    date, dept1, dept2, sharedCount:members.length,
-    order:{orderTime:ORDER.fields.orderTime, doneTime:ORDER.fields.doneTime, orderNo:ORDER.fields.orderNo, amount:ORDER.fields.amount},
-    members
-  })}).then(r=>r.json().then(j=>({ok:r.ok,j}))).then(({ok,j})=>{
-    if(!ok){ err.textContent=j.error||'提交失败'; err.className='err show'; return; }
-    showGroupResult(j);
-  }).catch(()=>{ err.textContent='网络错误，请稍后重试'; err.className='err show'; })
-  .finally(()=>{ btn.disabled=false; btn.textContent='提交审核'; });
+  // multipart 提交
+  const fd=new FormData();
+  fd.append('date',date); fd.append('dept1',dept1); fd.append('dept2',dept2);
+  fd.append('sharedCount',members.length);
+  fd.append('orderTime',orderTime); fd.append('doneTime',doneTime);
+  fd.append('orderNo',orderNo); fd.append('amount',amount);
+  fd.append('order',orderFile);
+  members.forEach(m=>{
+    if(m.punchFile) fd.append('punch',m.punchFile);
+  });
+  fd.append('members',JSON.stringify(members.map(m=>({
+    name:m.name, ali:m.ali, aliname:m.aliname,
+    punchTime:m.punchTime, punchDate:m.punchDate,
+    orderTime, doneTime, orderNo, amount
+  }))));
+
+  const btn=document.getElementById('btn-submit'); btn.disabled=true; btn.textContent='提交中…';
+  fetch(API+'/group',{method:'POST',body:fd})
+    .then(r=>r.json().then(j=>({ok:r.ok,j})))
+    .then(({ok,j})=>{
+      if(!ok){ err.textContent=j.error||'提交失败'; err.className='err show'; return; }
+      showSuccess(j);
+    })
+    .catch(()=>{ err.textContent='网络错误，请稍后重试'; err.className='err show'; })
+    .finally(()=>{ btn.disabled=false; btn.textContent='提交'; });
 }
 
-function showGroupResult(j){
+function showSuccess(j){
   const box=document.getElementById('result');
-  box.className='result '+(j.passCount?'ok':'no');
-  let h='<h4>'+(j.failCount===0?'✅ 全部通过（'+(j.passCount)+' 人）':(j.passCount?'⚠️ '+j.passCount+' 人通过 / '+j.failCount+' 人未通过':'❌ 全部未通过'))+'</h4>';
-  h+='<table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px;background:#fff;">'
-   + '<thead><tr><th style="text-align:left;padding:6px 8px;background:#f9fafb;border-bottom:1px solid var(--line)">姓名</th>'
-   + '<th style="text-align:left;padding:6px 8px;background:#f9fafb;border-bottom:1px solid var(--line)">通道</th>'
-   + '<th style="text-align:left;padding:6px 8px;background:#f9fafb;border-bottom:1px solid var(--line)">可报</th>'
-   + '<th style="text-align:left;padding:6px 8px;background:#f9fafb;border-bottom:1px solid var(--line)">说明</th></tr></thead><tbody>';
-  j.results.forEach(r=>{
-    h+='<tr><td style="padding:6px 8px;border-bottom:1px solid #f1f2f4"><b>'+r.name+'</b></td>'
-     + '<td style="padding:6px 8px;border-bottom:1px solid #f1f2f4">'+r.channel+'</td>'
-     + '<td style="padding:6px 8px;border-bottom:1px solid #f1f2f4">'+(r.pass?r.amount.toFixed(1)+' 元':'—')+'</td>'
-     + '<td style="padding:6px 8px;border-bottom:1px solid #f1f2f4">'+(r.pass?'通过':'<span style="color:var(--red)">'+r.reason+'</span>')+'</td></tr>';
-  });
-  h+='</tbody></table>';
-  h+='<p style="margin-top:10px;font-size:13px;">本次合计可报 <b>'+j.totalAmount.toFixed(1)+' 元</b>，报销款随本周结算分别转入各自支付宝。</p>';
-  box.innerHTML=h;
+  box.className='result ok';
+  box.innerHTML='<h4>✅ 提交成功（'+j.submitted+' 人）</h4>'
+    + '<p>已收到你的订单与打卡证明，后台将自动核对后完成审核。通过后报销款随本周结算转入各自支付宝。<br>'
+    + '如需修改，请联系行政（如信息有误请重新提交）。</p>';
   box.scrollIntoView({behavior:'smooth'});
+  document.getElementById('btn-submit').style.display='none';
 }
 
 renderMembers();
