@@ -28,12 +28,12 @@
   .btn.warn{background:#fff; color:var(--red); border:1px solid var(--red);}
   .btn.green{background:var(--green); border:none; color:#fff;}
   .btn.small{padding:5px 12px; font-size:12px; font-weight:500;}
-  table{width:100%; border-collapse:collapse; font-size:12.5px; background:#fff;}
+  table{width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; background:#fff;}
   th{background:#f9fafb; text-align:left; padding:7px 9px; font-size:11.5px; color:var(--sub); border-bottom:1px solid var(--line); white-space:nowrap;}
   td{padding:7px 9px; border-bottom:1px solid #f1f2f4; white-space:nowrap;}
   /* 操作列固定在右侧，避免被横向滚动条截到看不到删除按钮 */
-  #tbl{ min-width: 1280px; }
-  #tbl td:last-child, #tbl th:last-child { position: sticky; right: 0; background: #fff; box-shadow: -2px 0 6px rgba(0,0,0,.08); z-index: 2; }
+  #tbl{ min-width: 1180px; position: relative; table-layout: auto; }
+  #tbl td:last-child, #tbl th:last-child { position: sticky; right: 0; background: #fff; box-shadow: -2px 0 6px rgba(0,0,0,.08); z-index: 2; min-width: 110px; }
   #tbl thead th:last-child { background: #f9fafb; }
   .pill{display:inline-block; padding:1px 9px; border-radius:20px; font-size:11.5px; font-weight:600;}
   .pill.g{background:var(--green-bg); color:var(--green);}
@@ -49,7 +49,7 @@
   .login{max-width:360px; margin:80px auto 0;}
   .err{background:var(--red-bg); border:1px solid #fecaca; color:var(--red); border-radius:8px; padding:8px 12px; font-size:13px; margin-top:10px; display:none;}
   .err.show{display:block;}
-  .scroll{overflow-x:auto;}
+  .scroll{overflow-x:auto; max-width:100%;}
   .del{color:var(--red); cursor:pointer; font-size:12px; text-decoration:underline; background:none; border:none;}
   .empty{text-align:center; color:var(--sub); padding:24px 0;}
   .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:100;}
