@@ -64,10 +64,17 @@ function normDate(d) {
   return null;
 }
 
+// 默认：智谱 GLM 免费视觉模型（glm-4.6v-flash 永久免费）
+// 换厂商只需改环境变量：VISION_BASE_URL / VISION_API_KEY / VISION_MODEL
+const DEFAULT_BASE_URL = 'https://open.bigmodel.cn/api/paas/v4';
+const DEFAULT_MODEL = 'glm-4.6v-flash';
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 async function recognize(imageBuffer, kind) {
   const apiKey = process.env.VISION_API_KEY;
-  const baseUrl = process.env.VISION_BASE_URL || 'https://api.openai.com/v1';
-  const model = process.env.VISION_MODEL || 'gpt-4o-mini';
+  const baseUrl = process.env.VISION_BASE_URL || DEFAULT_BASE_URL;
+  const model = process.env.VISION_MODEL || DEFAULT_MODEL;
 
   if (!apiKey) {
     const err = new Error('未配置视觉识别服务（VISION_API_KEY 为空），请联系管理员');
@@ -76,7 +83,7 @@ async function recognize(imageBuffer, kind) {
   }
 
   const prompt = kind === 'punch' ? PUNCH_PROMPT : ORDER_PROMPT;
-  const dataUrl = 'data:image/' + (kind === 'punch' ? 'jpeg' : 'jpeg') + ';base64,' + imageBuffer.toString('base64');
+  const dataUrl = 'data:image/jpeg;base64,' + imageBuffer.toString('base64');
 
   const body = {
     model,
@@ -93,18 +100,29 @@ async function recognize(imageBuffer, kind) {
     max_tokens: 500
   };
 
-  const resp = await fetch(baseUrl.replace(/\/$/, '') + '/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + apiKey
-    },
-    body: JSON.stringify(body)
-  });
+  // 免费模型有限速（智谱约 5–10 次/分钟），遇 429 指数退避重试
+  const url = baseUrl.replace(/\/$/, '') + '/chat/completions';
+  let resp = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey
+      },
+      body: JSON.stringify(body)
+    });
+    if (resp.status !== 429 && resp.status !== 503) break;
+    if (attempt < 2) await sleep(1200 * Math.pow(2, attempt)); // 1.2s → 2.4s
+  }
 
   if (!resp.ok) {
     const txt = await resp.text().catch(() => '');
-    const err = new Error('视觉识别服务返回错误 ' + resp.status + '：' + txt.slice(0, 200));
+    let msg = '视觉识别服务返回错误 ' + resp.status;
+    if (resp.status === 429) msg = '识别请求过于频繁（免费额度限速），请稍候 10 秒后重试';
+    else if (resp.status === 401) msg = '视觉识别密钥无效，请联系管理员检查配置';
+    else msg += '：' + txt.slice(0, 200);
+    const err = new Error(msg);
     err.code = 'VISION_API_ERROR';
     err.status = resp.status;
     throw err;
@@ -149,4 +167,7 @@ function configured() {
   return !!process.env.VISION_API_KEY;
 }
 
-module.exports = { recognize, configured, normTime, normDate, parseJsonSafe };
+module.exports = {
+  recognize, configured, normTime, normDate, parseJsonSafe,
+  DEFAULT_BASE_URL, DEFAULT_MODEL
+};

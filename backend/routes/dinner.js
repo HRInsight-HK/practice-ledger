@@ -51,7 +51,11 @@ router.post('/recognize', (req, res, next) => {
 
 // 前端探测：视觉服务是否已配置
 router.get('/recognize/status', (req, res) => {
-  res.json({ configured: vision.configured(), model: process.env.VISION_MODEL || 'gpt-4o-mini' });
+  res.json({
+    configured: vision.configured(),
+    model: process.env.VISION_MODEL || vision.DEFAULT_MODEL,
+    baseUrl: process.env.VISION_BASE_URL || vision.DEFAULT_BASE_URL
+  });
 });
 
 // ==================== 凭证上传（multer）====================
