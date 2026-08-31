@@ -1,7 +1,6 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const multer = require('multer');
 const crypto = require('crypto');
 const { getData, saveData } = require('../lib/db');
 const { authMiddleware, requireRole } = require('../lib/auth');
@@ -9,26 +8,37 @@ const vision = require('../lib/vision');
 
 const router = express.Router();
 
-// ==================== 证明图上传（员工提交用，落盘） ====================
-// 员工上传 1 张订单证明图 + N 张打卡证明图，保存到 uploads/dinner-proofs/
-const PROOFS_DIR = path.join(__dirname, '..', 'uploads', 'dinner-proofs');
-if (!fs.existsSync(PROOFS_DIR)) fs.mkdirSync(PROOFS_DIR, { recursive: true });
-const proofStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, PROOFS_DIR),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname || '').toLowerCase() || '.png';
-    const safeExt = ['.png', '.jpg', '.jpeg', '.webp'].includes(ext) ? ext : '.png';
-    cb(null, 'pr_' + crypto.randomBytes(8).toString('hex') + safeExt);
+// ==================== 图片持久化：base64 存数据库 ====================
+// Render 免费版磁盘是临时的，部署重启会清空 uploads/，导致已上传证明图变成 HTML 兜底页。
+// 方案A：图片以 base64（dataURL）直接存进数据库（Postgres/Supabase JSONB），部署不丢。
+// 旧记录若只有 URL（orderImg/punchImg）则回退读文件系统（本地开发）。
+
+// 从 dataURL 提取图片 buffer；输入可为完整 dataURL 或裸 base64。取不到返回 null。
+function dataUrlToBuffer(data) {
+  if (!data) return null;
+  let s = String(data).trim();
+  if (!s) return null;
+  const comma = s.indexOf(',');
+  if (comma !== -1) s = s.slice(comma + 1);          // 去掉 data:image/xxx;base64, 前缀
+  if (!s) return null;
+  try { return Buffer.from(s, 'base64'); } catch (e) { return null; }
+}
+// 返回「纯 base64 字符串」（去掉 dataURL 前缀），用于存库；不合法返回 null
+function dataUrlToB64(data) {
+  const buf = dataUrlToBuffer(data);
+  return buf ? buf.toString('base64') : null;
+}
+// 识别时读取图片 buffer：优先库内 base64，否则读文件系统（兼容旧记录/本地）
+function readImgBuffer(r, field) {
+  const b64 = r && (r[field + 'Data']);
+  if (b64) { try { return Buffer.from(b64, 'base64'); } catch (e) {} }
+  const u = r && r[field === 'orderImg' ? 'orderImg' : 'punchImg'];
+  if (u) {
+    const abs = path.join(__dirname, '..', u.replace(/^\//, ''));
+    if (fs.existsSync(abs)) return fs.readFileSync(abs);
   }
-});
-const proofUpload = multer({
-  storage: proofStorage,
-  limits: { fileSize: 8 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (/^image\/(png|jpe?g|webp)$/i.test(file.mimetype)) cb(null, true);
-    else cb(new Error('仅支持 PNG/JPG/WEBP 图片'));
-  }
-});
+  return null;
+}
 
 // 视觉服务配置探测
 router.get('/recognize/status', (req, res) => {
@@ -37,26 +47,6 @@ router.get('/recognize/status', (req, res) => {
     model: process.env.VISION_MODEL || vision.DEFAULT_MODEL,
     baseUrl: process.env.VISION_BASE_URL || vision.DEFAULT_BASE_URL
   });
-});
-
-// ==================== 凭证上传（打款，落盘 uploads/dinner-receipts/） ====================
-const RECEIPTS_DIR = path.join(__dirname, '..', 'uploads', 'dinner-receipts');
-if (!fs.existsSync(RECEIPTS_DIR)) fs.mkdirSync(RECEIPTS_DIR, { recursive: true });
-const receiptStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, RECEIPTS_DIR),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname || '').toLowerCase() || '.png';
-    const safeExt = ['.png', '.jpg', '.jpeg', '.webp'].includes(ext) ? ext : '.png';
-    cb(null, 'rc_' + crypto.randomBytes(8).toString('hex') + safeExt);
-  }
-});
-const receiptUpload = multer({
-  storage: receiptStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (/^image\/(png|jpe?g|webp)$/i.test(file.mimetype)) cb(null, true);
-    else cb(new Error('仅支持 PNG/JPG/WEBP 图片'));
-  }
 });
 
 // ==================== 判定引擎（与方案规则一致） ====================
@@ -154,37 +144,38 @@ function judge(form, ai, records) {
 }
 
 // ==================== 员工提交（免登录，零等待） ====================
-// multipart：表单字段 + 1 张订单证明图(order) + N 张打卡证明图(punch)
-// 提交后只落盘 + 记录，不实时判定；由后台触发识别比对
-router.post('/group', proofUpload.fields([
-  { name: 'order', maxCount: 1 },
-  { name: 'punch', maxCount: 20 }
-]), async (req, res) => {
+// JSON：表单字段 + 1 张订单证明图(orderData, dataURL) + N 张打卡证明图(punchData[], dataURL)
+// 图片以 base64 存数据库（不落盘，避免 Render 临时盘清空导致图片丢失）
+router.post('/group', async (req, res) => {
   try {
     const body = req.body || {};
     const date = (body.date || '').trim();
     const dept1 = (body.dept1 || '').trim();
     const dept2 = (body.dept2 || '').trim();
     const sharedCount = parseInt(body.sharedCount) || 1;
-    const members = JSON.parse(body.members || '[]');
+    const members = Array.isArray(body.members) ? body.members : [];
 
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: '请选择用餐日期' });
     if (!dept1) return res.status(400).json({ error: '请填写一级部门' });
-    if (!Array.isArray(members) || !members.length) return res.status(400).json({ error: '请填写就餐人员' });
+    if (!members.length) return res.status(400).json({ error: '请填写就餐人员' });
     if (members.length !== sharedCount) {
       return res.status(400).json({ error: '就餐人数（' + sharedCount + '）与填写的人员数（' + members.length + '）不一致' });
     }
     if (sharedCount > 20) return res.status(400).json({ error: '拼单人数不合理' });
 
-    const files = req.files || {};
-    const orderImgs = files.order || [];
-    const punchImgs = files.punch || [];
-    if (!orderImgs.length) return res.status(400).json({ error: '请上传 1 张外卖订单证明图' });
-    if (punchImgs.length !== members.length) {
-      return res.status(400).json({ error: '需为每人上传 1 张打卡证明图（共 ' + members.length + ' 张，当前 ' + punchImgs.length + ' 张）' });
-    }
+    // 订单证明图：body.orderData (dataURL)
+    const orderData = String(body.orderData || '').trim();
+    if (!orderData || orderData.length < 50) return res.status(400).json({ error: '请上传 1 张外卖订单证明图' });
+    const orderB64 = dataUrlToB64(orderData);
+    if (!orderB64) return res.status(400).json({ error: '订单证明图格式无效，请重新上传' });
 
-    const orderImgUrl = '/uploads/dinner-proofs/' + orderImgs[0].filename;
+    // 每人打卡证明图：body.punchData 数组
+    const punchData = Array.isArray(body.punchData) ? body.punchData.map(x => String(x || '').trim()) : [];
+    if (punchData.length !== members.length) {
+      return res.status(400).json({ error: '需为每人上传 1 张打卡证明图（共 ' + members.length + ' 张，当前 ' + punchData.length + ' 张）' });
+    }
+    const punchB64 = punchData.map(d => dataUrlToB64(d));
+    if (punchB64.some(b => !b)) return res.status(400).json({ error: '存在无效的打卡证明图，请重新上传' });
 
     // 逐人校验
     const names = [];
@@ -226,8 +217,8 @@ router.post('/group', proofUpload.fields([
         groupNo,
         fields,             // 员工填写（待核验）
         ai: {},             // 识别结果（后台填）
-        orderImg: orderImgUrl,
-        punchImg: '/uploads/dinner-proofs/' + punchImgs[i].filename,
+        orderImgData: orderB64,      // 订单证明图（base64，持久化）
+        punchImgData: punchB64[i],   // 打卡证明图（base64，持久化）
         reviewStatus: 'pendingVerify',   // pendingVerify 待识别比对 | pendingManual 待人工审核 | verified 已通过 | rejected 已驳回
         verifyInfo: null,   // 比对结果说明
         status: null, channel: null, amount: 0, reason: null, weekUsed: 0, orderClaimed: 0,
@@ -245,9 +236,6 @@ router.post('/group', proofUpload.fields([
       message: '提交成功，待后台审核'
     });
   } catch (e) {
-    // 清理已上传文件
-    const files = (req.files || {});
-    Object.values(files).flat().forEach(f => { try { fs.unlinkSync(f.path); } catch (_) {} });
     if (e && e.type === 'entity.parse.failed') return res.status(400).json({ error: '提交数据格式错误，请刷新后重试' });
     res.status(500).json({ error: (e && e.message) || '提交失败' });
   }
@@ -303,12 +291,11 @@ router.post('/group/:groupNo/recognize', authMiddleware, requireRole('admin', 'h
 });
 
 async function recognizeOne(data, r) {
-  const PROOF_DIR = PROOFS_DIR;
-  const abs = url => url ? path.join(__dirname, '..', url.replace(/^\//, '')) : null;
-  const orderPath = abs(r.orderImg);
-  const orderAI = fs.existsSync(orderPath) ? await vision.recognize(fs.readFileSync(orderPath), 'order') : null;
-  const punchPath = abs(r.punchImg);
-  const punchAI = fs.existsSync(punchPath) ? await vision.recognize(fs.readFileSync(punchPath), 'punch') : null;
+  // 优先库内 base64，其次文件系统（兼容旧记录/本地开发）
+  const orderBuf = readImgBuffer(r, 'orderImg');
+  const punchBuf = readImgBuffer(r, 'punchImg');
+  const orderAI = orderBuf ? await vision.recognize(orderBuf, 'order') : null;
+  const punchAI = punchBuf ? await vision.recognize(punchBuf, 'punch') : null;
   const ai = {
     orderTime: orderAI ? orderAI.orderTime : null,
     doneTime: orderAI ? (orderAI.doneTime || orderAI.orderTime) : null,
@@ -433,62 +420,65 @@ router.delete('/records/:id', authMiddleware, requireRole('admin', 'hr'), async 
 });
 
 // ==================== 打款：单条 ====================
-router.post('/records/:id/pay', authMiddleware, requireRole('admin', 'hr'),
-  receiptUpload.single('receipt'), async (req, res) => {
-    const data = getData();
-    const r = (data.dinnerRecords || []).find(x => x.id === req.params.id);
-    if (!r) return res.status(404).json({ error: '记录不存在' });
-    if (!r.status || !r.status.startsWith('PASS')) return res.status(400).json({ error: '仅通过的记录可标记打款' });
-    const note = (req.body && req.body.note || '').toString().trim();
+// body: { note?, receiptData? }  receiptData 为打款凭证 dataURL（base64 存库，避免 Render 清盘）
+router.post('/records/:id/pay', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
+  const data = getData();
+  const r = (data.dinnerRecords || []).find(x => x.id === req.params.id);
+  if (!r) return res.status(404).json({ error: '记录不存在' });
+  if (!r.status || !r.status.startsWith('PASS')) return res.status(400).json({ error: '仅通过的记录可标记打款' });
+  const body = req.body || {};
+  const note = String(body.note || '').toString().trim();
+  const receiptB64 = dataUrlToB64(body.receiptData);
+  r.paid = true;
+  r.paidAt = new Date().toISOString();
+  r.paidBatchId = r.paidBatchId || ('B' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex'));
+  r.paidReceipt = {
+    type: receiptB64 ? 'image' : (note ? 'note' : null),
+    receiptData: receiptB64 || null,   // 持久化凭证（base64）
+    url: r.paidReceipt && r.paidReceipt.url ? r.paidReceipt.url : null,  // 兼容旧记录
+    note: note || ''
+  };
+  r.paidBy = req.user.username;
+  await saveData();
+  res.json({ success: true, id: r.id, paid: true, paidAt: r.paidAt, paidBatchId: r.paidBatchId });
+});
+
+// ==================== 打款：批量（一次性给一人多笔） ====================
+router.post('/records/batch-pay', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
+  const body = req.body || {};
+  const idsRaw = String(body.ids || '').toString();
+  const note = String(body.note || '').toString().trim();
+  const receiptB64 = dataUrlToB64(body.receiptData);
+  const ids = idsRaw.split(',').map(s => s.trim()).filter(Boolean);
+  if (!ids.length) return res.status(400).json({ error: '请选择要打款的记录（ids 为空）' });
+  const data = getData();
+  const batchId = 'B' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex');
+  const now = new Date().toISOString();
+  const updated = [];
+  const skipped = [];
+  for (const id of ids) {
+    const r = (data.dinnerRecords || []).find(x => x.id === id);
+    if (!r) { skipped.push({ id, reason: '记录不存在' }); continue; }
+    if (!r.status || !r.status.startsWith('PASS')) { skipped.push({ id, reason: '非通过记录' }); continue; }
     r.paid = true;
-    r.paidAt = new Date().toISOString();
-    r.paidBatchId = r.paidBatchId || ('B' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex'));
+    r.paidAt = now;
+    r.paidBatchId = batchId;
     r.paidReceipt = {
-      type: req.file ? 'image' : (note ? 'note' : null),
-      url: req.file ? ('/uploads/dinner-receipts/' + req.file.filename) : null,
+      type: receiptB64 ? 'image' : (note ? 'note' : null),
+      receiptData: receiptB64 || null,
+      url: r.paidReceipt && r.paidReceipt.url ? r.paidReceipt.url : null,
       note: note || ''
     };
     r.paidBy = req.user.username;
-    await saveData();
-    res.json({ success: true, id: r.id, paid: true, paidAt: r.paidAt, paidBatchId: r.paidBatchId });
+    updated.push({ id: r.id, amount: r.amount });
   }
-);
-
-// ==================== 打款：批量（一次性给一人多笔） ====================
-router.post('/records/batch-pay', authMiddleware, requireRole('admin', 'hr'),
-  receiptUpload.single('receipt'), async (req, res) => {
-    const idsRaw = (req.body && req.body.ids || '').toString();
-    const note = (req.body && req.body.note || '').toString().trim();
-    const ids = idsRaw.split(',').map(s => s.trim()).filter(Boolean);
-    if (!ids.length) return res.status(400).json({ error: '请选择要打款的记录（ids 为空）' });
-    const data = getData();
-    const batchId = 'B' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex');
-    const now = new Date().toISOString();
-    const updated = [];
-    const skipped = [];
-    for (const id of ids) {
-      const r = (data.dinnerRecords || []).find(x => x.id === id);
-      if (!r) { skipped.push({ id, reason: '记录不存在' }); continue; }
-      if (!r.status || !r.status.startsWith('PASS')) { skipped.push({ id, reason: '非通过记录' }); continue; }
-      r.paid = true;
-      r.paidAt = now;
-      r.paidBatchId = batchId;
-      r.paidReceipt = {
-        type: req.file ? 'image' : (note ? 'note' : null),
-        url: req.file ? ('/uploads/dinner-receipts/' + req.file.filename) : null,
-        note: note || ''
-      };
-      r.paidBy = req.user.username;
-      updated.push({ id: r.id, amount: r.amount });
-    }
-    await saveData();
-    res.json({
-      success: true, batchId, paidCount: updated.length,
-      totalAmount: updated.reduce((s, x) => s + x.amount, 0),
-      skipped
-    });
-  }
-);
+  await saveData();
+  res.json({
+    success: true, batchId, paidCount: updated.length,
+    totalAmount: updated.reduce((s, x) => s + x.amount, 0),
+    skipped
+  });
+});
 
 // ==================== 取消打款标记（误点可撤回）====================
 router.post('/records/:id/unpay', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {

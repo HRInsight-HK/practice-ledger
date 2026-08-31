@@ -213,11 +213,12 @@ function renderLedger(){
     const [rvtxt,rvcls]=RV[r.reviewStatus]||['—','b'];
     const canCheck=r.status&&r.status.startsWith('PASS')&&!r.paid&&r.reviewStatus==='verified';
     const ck=canCheck?'<input type="checkbox" class="row-check" data-id="'+r.id+'" data-name="'+esc(r.name)+'" data-amount="'+r.amount+'" onchange="onCheckChange()">':'<span style="color:var(--sub)">—</span>';
+    const rs=receiptSrc(r);
     const paidCell=r.paid
-      ? '<span class="pill g" title="'+(r.paidAt||'')+'">已打款</span> '+(r.paidReceipt&&r.paidReceipt.url?'<a href="'+esc(r.paidReceipt.url)+'" target="_blank" class="receipt-link">凭证</a>':'')
+      ? '<span class="pill g" title="'+(r.paidAt||'')+'">已打款</span> '+(rs?'<a href="'+esc(rs.href)+'" target="_blank" class="receipt-link">凭证</a>':'')
       : '<span class="pill b">未打款</span>';
-    // 证明图缩略
-    const proofs=(r.orderImg?'<img class="proof-thumb" src="'+esc(r.orderImg)+'" title="订单证明图" onclick="viewImg(\''+esc(r.orderImg)+'\')">':'')+(r.punchImg?'<img class="proof-thumb" src="'+esc(r.punchImg)+'" title="打卡证明图" onclick="viewImg(\''+esc(r.punchImg)+'\')">':'');
+    // 证明图缩略（优先库内 base64，回退 URL）
+    const proofs=(r.orderImgData||r.orderImg?'<img class="proof-thumb" src="'+esc(proofSrc(r,'orderImg'))+'" title="订单证明图" onclick="viewImg(\''+esc(proofSrc(r,'orderImg'))+'\')">':'')+(r.punchImgData||r.punchImg?'<img class="proof-thumb" src="'+esc(proofSrc(r,'punchImg'))+'" title="打卡证明图" onclick="viewImg(\''+esc(proofSrc(r,'punchImg'))+'\')">':'');
     // 员工填写 vs 识别结果
     const f=r.fields||{};
     const a=r.ai||{};
@@ -322,8 +323,8 @@ function openReview(id){
             <div style="font-size:12.5px;">下单 ${esc(a.orderTime||'—')}<br>订单号 ${esc(a.orderNo||'—')}<br>实付 ${fmtM(a.amount||0)} 元<br>打卡 ${esc(a.punchTime||'—')} ${esc(a.punchDate||'')}</div></div>
         </div>
         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-          ${r.orderImg?'<a href="'+esc(r.orderImg)+'" target="_blank"><img src="'+esc(r.orderImg)+'" style="max-width:200px;max-height:140px;border-radius:6px;border:1px solid var(--line)"></a>':''}
-          ${r.punchImg?'<a href="'+esc(r.punchImg)+'" target="_blank"><img src="'+esc(r.punchImg)+'" style="max-width:200px;max-height:140px;border-radius:6px;border:1px solid var(--line)"></a>':''}
+          ${(r.orderImgData||r.orderImg)?'<a href="'+esc(proofSrc(r,'orderImg'))+'" target="_blank"><img src="'+esc(proofSrc(r,'orderImg'))+'" style="max-width:200px;max-height:140px;border-radius:6px;border:1px solid var(--line)"></a>':''}
+          ${(r.punchImgData||r.punchImg)?'<a href="'+esc(proofSrc(r,'punchImg'))+'" target="_blank"><img src="'+esc(proofSrc(r,'punchImg'))+'" style="max-width:200px;max-height:140px;border-radius:6px;border:1px solid var(--line)"></a>':''}
         </div>
         <div style="margin-bottom:10px;"><label>核对后修正字段（不填则用员工填写/识别值）</label>
           <div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -403,22 +404,44 @@ function openBatchPay(){
   document.body.insertAdjacentHTML('beforeend', html);
 }
 function submitBatchPay(ids){
-  const fd=new FormData();
   const file=document.getElementById('pay-receipt').files[0];
-  if(file) fd.append('receipt',file);
   const note=document.getElementById('pay-note').value.trim();
-  if(note) fd.append('note',note);
-  fd.append('ids',ids);
-  const token=localStorage.getItem(TOKEN_KEY);
-  fetch('/api/dinner/records/batch-pay',{method:'POST',headers:{'Authorization':'Bearer '+token},body:fd})
-    .then(r=>r.json().then(j=>({ok:r.ok,j})))
-    .then(({ok,j})=>{
-      if(!ok){ alert(j.error||'打款失败'); return; }
-      closeModal();
-      alert('已打款 '+j.paidCount+' 条，合计 '+fmtM(j.totalAmount)+' 元'+(j.skipped&&j.skipped.length?'；跳过 '+j.skipped.length+' 条':''));
-      loadRecords();
-    })
-    .catch(()=>alert('网络错误'));
+  const doSubmit=(receiptData)=>{
+    const payload={ids,note};
+    if(receiptData) payload.receiptData=receiptData;
+    const token=localStorage.getItem(TOKEN_KEY);
+    fetch('/api/dinner/records/batch-pay',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},body:JSON.stringify(payload)})
+      .then(r=>r.json().then(j=>({ok:r.ok,j})))
+      .then(({ok,j})=>{
+        if(!ok){ alert(j.error||'打款失败'); return; }
+        closeModal();
+        alert('已打款 '+j.paidCount+' 条，合计 '+fmtM(j.totalAmount)+' 元'+(j.skipped&&j.skipped.length?'；跳过 '+j.skipped.length+' 条':''));
+        loadRecords();
+      })
+      .catch(()=>alert('网络错误'));
+  };
+  if(file){
+    compressImage(file).then(doSubmit).catch(()=>alert('凭证压缩失败，请重试'));
+  } else {
+    doSubmit(null);
+  }
+}
+
+// 图片压缩（后端 base64 存库，兼容打款凭证）
+function compressImage(file){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=1280; let {width:w,height:h}=img;
+      if(w>MAX||h>MAX){ const k=MAX/Math.max(w,h); w=Math.round(w*k); h=Math.round(h*k); }
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);
+      ctx.drawImage(img,0,0,w,h);
+      resolve(c.toDataURL('image/jpeg',0.7));
+    };
+    img.onerror=()=>reject(new Error('图片读取失败'));
+    img.src=URL.createObjectURL(file);
+  });
 }
 
 function renderWeekly(){
@@ -477,6 +500,21 @@ function exportCSV(){
 }
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// 图片展示源：优先库内 base64（orderImgData/punchImgData），否则回退文件 URL（兼容旧记录）
+function proofSrc(r, field){
+  const d=r && (field==='orderImg'?r.orderImgData:r.punchImgData);
+  if(d) return 'data:image/jpeg;base64,'+d;
+  const u=r && (field==='orderImg'?r.orderImg:r.punchImg);
+  return u||null;
+}
+function receiptSrc(r){
+  if(r && r.paidReceipt){
+    if(r.paidReceipt.receiptData) return {src:'data:image/jpeg;base64,'+r.paidReceipt.receiptData, href:'data:image/jpeg;base64,'+r.paidReceipt.receiptData};
+    if(r.paidReceipt.url) return {src:r.paidReceipt.url, href:r.paidReceipt.url};
+  }
+  return null;
+}
 
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));

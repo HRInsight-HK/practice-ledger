@@ -126,7 +126,28 @@ const API = location.origin.startsWith('http') && !location.origin.includes('loc
   ? location.origin + '/api/dinner' : '/api/dinner';
 
 document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
-const PUNCH_IMG = {};   // idx -> {name, ownerIndex, previewUrl, file}
+const PUNCH_IMG = {};   // idx -> {name, ownerIndex, dataUrl}
+const ORDER_IMG = { dataUrl: null }; // 订单证明图 dataURL
+
+// ==================== 图片压缩（base64 存库，避免 Render 清盘 & 控制体积） ====================
+// 最长边 1280、JPEG 质量 0.7，单张约 80~250KB
+function compressImage(file){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=1280;
+      let {width:w,height:h}=img;
+      if(w>MAX||h>MAX){ const k=MAX/Math.max(w,h); w=Math.round(w*k); h=Math.round(h*k); }
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      const ctx=c.getContext('2d');
+      ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h);   // 透明底转白底，避免 JPEG 黑色底
+      ctx.drawImage(img,0,0,w,h);
+      resolve(c.toDataURL('image/jpeg',0.7));
+    };
+    img.onerror=()=>reject(new Error('图片读取失败'));
+    img.src=URL.createObjectURL(file);
+  });
+}
 
 function n(){ return parseInt(document.getElementById('f-shared').value)||1; }
 
@@ -168,7 +189,7 @@ function renderMembers(){
   payEl.innerHTML = yh;
   syncOwners();
   // 保留已选打卡图
-  Object.keys(PUNCH_IMG).forEach(k=>{ if(PUNCH_IMG[k]&&PUNCH_IMG[k].previewUrl){ const img=document.getElementById('punch-prev-'+k); const zn=document.getElementById('punch-zone-'+k); if(img){img.src=PUNCH_IMG[k].previewUrl;img.style.display='block';} if(zn) zn.classList.add('has-img'); } });
+  Object.keys(PUNCH_IMG).forEach(k=>{ if(PUNCH_IMG[k]&&PUNCH_IMG[k].dataUrl){ const img=document.getElementById('punch-prev-'+k); const zn=document.getElementById('punch-zone-'+k); if(img){img.src=PUNCH_IMG[k].dataUrl;img.style.display='block';} if(zn) zn.classList.add('has-img'); } });
 }
 
 function syncOwners(){
@@ -190,21 +211,20 @@ function onPunch(i, input){
   const f=input.files[0]; if(!f) return;
   const img=document.getElementById('punch-prev-'+i);
   const zn=document.getElementById('punch-zone-'+i);
-  const rd=new FileReader();
-  rd.onload=()=>{ img.src=rd.result; img.style.display='block'; zn.classList.add('has-img'); };
-  rd.readAsDataURL(f);
-  PUNCH_IMG[i]={file:f, previewUrl:null};
-  // 预览
-  const rd2=new FileReader(); rd2.onload=()=>{ PUNCH_IMG[i].previewUrl=rd2.result; img.src=rd2.result; img.style.display='block'; zn.classList.add('has-img'); }; rd2.readAsDataURL(f);
+  compressImage(f).then(dataUrl=>{
+    img.src=dataUrl; img.style.display='block'; zn.classList.add('has-img');
+    PUNCH_IMG[i]={dataUrl};
+  }).catch(()=>alert('图片压缩失败，请换一张'));
 }
 
 function preview(input, imgId, zoneId){
   const f=input.files[0]; if(!f) return;
   const img=document.getElementById(imgId);
   const zn=document.getElementById(zoneId);
-  const rd=new FileReader();
-  rd.onload=()=>{ img.src=rd.result; img.style.display='block'; zn.classList.add('has-img'); zn.style.display='block'; };
-  rd.readAsDataURL(f);
+  compressImage(f).then(dataUrl=>{
+    img.src=dataUrl; img.style.display='block'; zn.classList.add('has-img'); zn.style.display='block';
+    ORDER_IMG.dataUrl=dataUrl;
+  }).catch(()=>alert('图片压缩失败，请换一张'));
 }
 
 function collect(){
@@ -218,7 +238,7 @@ function collect(){
       name:names[k]||'',
       punchTime:(document.querySelector('.m-ptime[data-idx="'+k+'"]')||{}).value||'',
       punchDate:(document.querySelector('.m-pdate[data-idx="'+k+'"]')||{}).value||'',
-      punchFile: (idx>=0 && PUNCH_IMG[idx] && PUNCH_IMG[idx].file) || null,
+      punchFile: (idx>=0 && PUNCH_IMG[idx] && PUNCH_IMG[idx].dataUrl) || null,
       ali:(document.querySelector('.m-ali[data-idx="'+k+'"]')||{}).value||'',
       aliname:(document.querySelector('.m-aliname[data-idx="'+k+'"]')||{}).value||''
     });
@@ -242,7 +262,7 @@ function submitGroup(){
   if(!orderNo){ err.textContent='请填写订单号'; err.className='err show'; return; }
   if(!amount){ err.textContent='请填写实付金额'; err.className='err show'; return; }
 
-  const orderFile=document.getElementById('order-file').files[0];
+  const orderFile=ORDER_IMG.dataUrl;
   if(!orderFile){ err.textContent='请上传 1 张外卖订单证明截图'; err.className='err show'; return; }
 
   const members=collect();
@@ -253,24 +273,22 @@ function submitGroup(){
     if(!m.ali.trim()||!m.aliname.trim()){ err.textContent='请填写 '+m.name+' 的支付宝账号与实名姓名'; err.className='err show'; return; }
   }
 
-  // multipart 提交
-  const fd=new FormData();
-  fd.append('date',date); fd.append('dept1',dept1); fd.append('dept2',dept2);
-  fd.append('sharedCount',members.length);
-  fd.append('orderTime',orderTime); fd.append('doneTime',doneTime);
-  fd.append('orderNo',orderNo); fd.append('amount',amount);
-  fd.append('order',orderFile);
-  members.forEach(m=>{
-    if(m.punchFile) fd.append('punch',m.punchFile);
-  });
-  fd.append('members',JSON.stringify(members.map(m=>({
-    name:m.name, ali:m.ali, aliname:m.aliname,
-    punchTime:m.punchTime, punchDate:m.punchDate,
-    orderTime, doneTime, orderNo, amount
-  }))));
+  // JSON 提交（图片为 dataURL，后端 base64 存库）
+  const payload={
+    date, dept1, dept2,
+    sharedCount:members.length,
+    orderTime, doneTime, orderNo, amount,
+    orderData:ORDER_IMG.dataUrl,
+    punchData:members.map(m=>m.punchFile),
+    members:members.map(m=>({
+      name:m.name, ali:m.ali, aliname:m.aliname,
+      punchTime:m.punchTime, punchDate:m.punchDate,
+      orderTime, doneTime, orderNo, amount
+    }))
+  };
 
   const btn=document.getElementById('btn-submit'); btn.disabled=true; btn.textContent='提交中…';
-  fetch(API+'/group',{method:'POST',body:fd})
+  fetch(API+'/group',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     .then(r=>r.json().then(j=>({ok:r.ok,j})))
     .then(({ok,j})=>{
       if(!ok){ err.textContent=j.error||'提交失败'; err.className='err show'; return; }
