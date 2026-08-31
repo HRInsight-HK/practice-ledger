@@ -108,6 +108,7 @@
             <option value="month">近 1 月</option>
           </select>
           <span style="flex:1"></span>
+          <button class="btn small ghost" id="btn-mark-missing" onclick="markImageMissing()" title="把当前待识别但图片已丢失的旧记录一键转为待人工审核（避免每次手动触发都浪费智谱配额）">🧹 标记图片丢失</button>
           <button class="btn small green" id="btn-recognize-all" onclick="recognizeAllPending()">🤖 识别全部待核验</button>
           <button class="btn small ghost" id="btn-batch-pay" onclick="openBatchPay()" disabled>💰 批量打款（0）</button>
           <button class="btn small ghost" onclick="loadRecords()">↻ 刷新</button>
@@ -217,8 +218,12 @@ function renderLedger(){
     const paidCell=r.paid
       ? '<span class="pill g" title="'+(r.paidAt||'')+'">已打款</span> '+(rs?'<a href="'+esc(rs.href)+'" target="_blank" class="receipt-link">凭证</a>':'')
       : '<span class="pill b">未打款</span>';
-    // 证明图缩略（优先库内 base64，回退 URL）
-    const proofs=(r.orderImgData||r.orderImg?'<img class="proof-thumb" src="'+esc(proofSrc(r,'orderImg'))+'" title="订单证明图" onclick="viewImg(\''+esc(proofSrc(r,'orderImg'))+'\')">':'')+(r.punchImgData||r.punchImg?'<img class="proof-thumb" src="'+esc(proofSrc(r,'punchImg'))+'" title="打卡证明图" onclick="viewImg(\''+esc(proofSrc(r,'punchImg'))+'\')">':'');
+    // 证明图缩略（优先库内 base64，回退 URL）+ 图片状态徽标
+    const orderState = r.orderImgData ? '已存' : (r.orderImg ? '⚠️丢失' : '无');
+    const punchState = r.punchImgData ? '已存' : (r.punchImg ? '⚠️丢失' : '无');
+    const orderTag = r.orderImgData ? '<span class="pill g" style="font-size:11px;padding:2px 6px;">已存</span>' : (r.orderImg ? '<span class="pill r" style="font-size:11px;padding:2px 6px;">已丢失</span>' : '<span style="color:var(--sub);font-size:11px;">无</span>');
+    const punchTag = r.punchImgData ? '<span class="pill g" style="font-size:11px;padding:2px 6px;">已存</span>' : (r.punchImg ? '<span class="pill r" style="font-size:11px;padding:2px 6px;">已丢失</span>' : '<span style="color:var(--sub);font-size:11px;">无</span>');
+    const proofs=(r.orderImgData||r.orderImg?'<div style="margin-bottom:4px;">'+orderTag+' <img class="proof-thumb" src="'+esc(proofSrc(r,'orderImg'))+'" title="订单证明图 '+orderState+'" onclick="viewImg(\''+esc(proofSrc(r,'orderImg'))+'\')"></div>':'')+(r.punchImgData||r.punchImg?'<div>'+punchTag+' <img class="proof-thumb" src="'+esc(proofSrc(r,'punchImg'))+'" title="打卡证明图 '+punchState+'" onclick="viewImg(\''+esc(proofSrc(r,'punchImg'))+'\')"></div>':'');
     // 员工填写 vs 识别结果
     const f=r.fields||{};
     const a=r.ai||{};
@@ -236,7 +241,7 @@ function renderLedger(){
       '<td style="white-space:normal;max-width:150px;">'+aiCell+'</td>'+
       '<td><span class="pill '+cls+'">'+txt+'</span></td>'+
       '<td class="money '+(r.status==='PASS_CAPPED'?'cap':'')+'">'+(r.amount>0?fmtM(r.amount)+' 元':'—')+'</td>'+
-      '<td style="white-space:normal; max-width:240px;">'+esc(r.reason||(r.verifyInfo&&r.verifyInfo.differences?('⚠️ '+r.verifyInfo.differences.join('；')):''))+'</td>'+
+      '<td style="white-space:normal; max-width:240px;">'+(r.verifyInfo&&r.verifyInfo.imageMissing?'<span class="pill r">🖼️ 图片已丢失</span> 请员工重新提交':esc(r.reason||(r.verifyInfo&&r.verifyInfo.differences?('⚠️ '+r.verifyInfo.differences.join('；')):'')))+'</td>'+
       '<td style="white-space:normal;">'+esc(r.ali)+'<br>'+esc(r.aliname)+'</td>'+
       '<td style="white-space:normal; min-width:120px;">'+paidCell+'</td>'+
       '<td style="white-space:nowrap;">'+ops+'</td></tr>';
@@ -304,6 +309,20 @@ function recognizeAllPending(){
     api('/records/'+list.shift()+'/recognize',{method:'POST'}).finally(()=>runSeq(list));
   };
   runSeq(ids.slice());
+}
+
+// 一键标记图片已丢失的待识别记录为待人工审核
+// 适用：旧版本 multipart 提交的记录，文件已被 Render 清空，再触发识别只会浪费智谱配额
+function markImageMissing(){
+  if(!confirm('把当前待识别但图片已丢失的旧记录一键转为待人工审核？\n（不再调用智谱，直接标"图片已丢失，请员工重新提交"）')) return;
+  api('/records/mark-image-missing',{method:'POST'}).then(j=>{
+    if(j&&j.success){
+      alert('已标记 '+j.updated+' 条图片丢失的记录为待人工审核');
+      loadRecords();
+    } else {
+      alert((j&&j.error)||'操作失败');
+    }
+  }).catch(e=>alert('网络错误：'+(e.message||e)));
 }
 
 // ==================== 人工审核 ====================

@@ -259,12 +259,21 @@ router.post('/records/:id/recognize', authMiddleware, requireRole('admin', 'hr')
   } catch (e) {
     // 识别异常 → 待人工审核，保留信息
     const code = e.code || 'VISION_ERROR';
+    const imageMissing = code === 'IMAGE_MISSING';
     r.reviewStatus = 'pendingManual';
-    r.verifyInfo = { matched: false, error: e.message, differences: ['识别失败：' + (e.message || '')], decidedAt: new Date().toISOString() };
+    r.verifyInfo = {
+      matched: false,
+      code,
+      imageMissing,
+      missing: e.missing || [],
+      error: e.message,
+      differences: [imageMissing ? e.message : ('识别失败：' + (e.message || ''))],
+      decidedAt: new Date().toISOString()
+    };
     await saveData().catch(() => {});
     res.status(code === 'NO_VISION_KEY' ? 503 : 200).json({
       success: false, id: r.id, reviewStatus: 'pendingManual',
-      matched: false, error: e.message, code,
+      matched: false, error: e.message, code, imageMissing,
       configured: vision.configured()
     });
   }
@@ -281,9 +290,16 @@ router.post('/group/:groupNo/recognize', authMiddleware, requireRole('admin', 'h
       const out = await recognizeOne(data, r);
       results.push({ id: r.id, name: r.name, ok: true, ...out });
     } catch (e) {
+      const code = e.code || 'VISION_ERROR';
+      const imageMissing = code === 'IMAGE_MISSING';
       r.reviewStatus = 'pendingManual';
-      r.verifyInfo = { matched: false, error: e.message, differences: ['识别失败：' + (e.message || '')], decidedAt: new Date().toISOString() };
-      results.push({ id: r.id, name: r.name, ok: false, error: e.message });
+      r.verifyInfo = {
+        matched: false, code, imageMissing, missing: e.missing || [],
+        error: e.message,
+        differences: [imageMissing ? e.message : ('识别失败：' + (e.message || ''))],
+        decidedAt: new Date().toISOString()
+      };
+      results.push({ id: r.id, name: r.name, ok: false, error: e.message, code, imageMissing });
     }
   }
   await saveData();
@@ -294,6 +310,18 @@ async function recognizeOne(data, r) {
   // 优先库内 base64，其次文件系统（兼容旧记录/本地开发）
   const orderBuf = readImgBuffer(r, 'orderImg');
   const punchBuf = readImgBuffer(r, 'punchImg');
+  // 图片全部丢失（Render 临时盘清空 / 旧记录没 base64）：直接抛出，不浪费智谱配额
+  const orderHas = !!(r.orderImgData || r.orderImg);
+  const punchHas = !!(r.punchImgData || r.punchImg);
+  if ((orderHas && !orderBuf) || (punchHas && !punchBuf) || (!orderBuf && !punchBuf)) {
+    const missing = [];
+    if (orderHas && !orderBuf) missing.push('订单图');
+    if (punchHas && !punchBuf) missing.push('打卡图');
+    const err = new Error(missing.length ? ('图片已丢失：' + missing.join('、') + '（部署重启清空），请员工重新提交') : '证明图缺失');
+    err.code = 'IMAGE_MISSING';
+    err.missing = missing;
+    throw err;
+  }
   const orderAI = orderBuf ? await vision.recognize(orderBuf, 'order') : null;
   const punchAI = punchBuf ? await vision.recognize(punchBuf, 'punch') : null;
   const ai = {
@@ -397,6 +425,34 @@ router.post('/records/:id/manual-review', authMiddleware, requireRole('admin', '
     success: true, id: r.id, reviewStatus: 'verified',
     status: r.status, channel: r.channel, amount: r.amount, reason: r.reason
   });
+});
+
+// ==================== 一键诊断：标记图片已丢失的旧记录为待人工 ====================
+// Render 临时盘清空后，旧记录（base64 改造前的）证明图已无法读取。
+// 这条接口把这类记录批量置为 pendingManual + 标注 imageMissing，避免每次手动触发识别都浪费智谱配额。
+// 也用于上线后清理历史脏数据。
+router.post('/records/mark-image-missing', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
+  const data = getData();
+  let updated = 0;
+  for (const r of (data.dinnerRecords || [])) {
+    if (r.reviewStatus !== 'pendingVerify') continue;
+    const orderMissing = !!(r.orderImg && !r.orderImgData && !readImgBuffer(r, 'orderImg'));
+    const punchMissing = !!(r.punchImg && !r.punchImgData && !readImgBuffer(r, 'punchImg'));
+    if (!orderMissing && !punchMissing) continue;
+    const missing = [];
+    if (orderMissing) missing.push('订单图');
+    if (punchMissing) missing.push('打卡图');
+    r.reviewStatus = 'pendingManual';
+    r.verifyInfo = {
+      matched: false, code: 'IMAGE_MISSING', imageMissing: true, missing,
+      error: '图片已丢失：' + missing.join('、') + '（部署重启清空），请员工重新提交',
+      differences: ['图片已丢失，请员工重新提交'],
+      decidedAt: new Date().toISOString()
+    };
+    updated++;
+  }
+  await saveData();
+  res.json({ success: true, updated });
 });
 
 // ==================== 台账（登录可见） ====================
