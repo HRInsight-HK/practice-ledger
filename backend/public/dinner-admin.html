@@ -242,6 +242,7 @@ function renderLedger(){
     let ops='<button class="del" onclick="delRec(\''+r.id+'\')">删除</button>';
     if(r.reviewStatus==='pendingVerify') ops+=' <button class="btn small ghost" onclick="recognizeOne('+r.id+')">🤖 识别</button>';
     if(r.reviewStatus==='pendingManual') ops+=' <button class="btn small ghost" onclick="recognizeOne(\''+r.id+'\')">🔁 重新识别</button> <button class="btn small green" onclick="openReview(\''+r.id+'\')">人工审核</button>';
+    if(r.reviewStatus==='verified' && !r.paid) ops+=' <button class="btn small green" onclick="openPayOne(\''+r.id+'\',\''+esc(r.name)+'\','+r.amount+')">💰 打款</button>';
     if(r.paid) ops+=' <button class="del" style="color:var(--sub);border-color:transparent;" onclick="unpayRec(\''+r.id+'\')">撤回</button>';
     opsList.push(ops);
     return '<tr><td>'+ck+'</td><td>'+r.createdAt.replace('T',' ').slice(0,16)+'</td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.dept1)+(r.dept2?' / '+esc(r.dept2):'')+'</td><td>'+r.date+'</td>'+
@@ -415,6 +416,43 @@ function delRec(id){
 function unpayRec(id){
   if(!confirm('撤回这条的打款标记？')) return;
   api('/records/'+id+'/unpay',{method:'POST'}).then(({ok,j})=>{ if(ok) loadRecords(); else alert(j.error||'撤回失败'); });
+}
+
+// ==================== 单条打款模态（操作列直接打款，不用勾选） ====================
+function openPayOne(id, name, amount){
+  const html=`
+    <div class="modal-mask" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <h3>💰 打款 · ${esc(name)} · ${fmtM(amount)} 元</h3>
+        <p style="font-size:13px;color:var(--sub);margin-bottom:10px;">上传本次转账截图（PNG/JPG/WEBP，可选），系统会把凭证 base64 存库（Render 重启不会丢），便于对账。</p>
+        <div style="margin-top:12px;"><label>打款凭证截图（可选）</label><input type="file" id="pay-receipt-one" accept="image/*"></div>
+        <div style="margin-top:10px;"><label>备注（可选）</label><input id="pay-note-one" placeholder="例如：支付宝转账 2026-08-29"></div>
+        <div style="margin-top:14px;text-align:right;">
+          <button class="btn small ghost" onclick="closeModal()">取消</button>
+          <button class="btn green" onclick="submitPayOne('${id}')">确认打款</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+function submitPayOne(id){
+  const file=document.getElementById('pay-receipt-one').files[0];
+  const note=document.getElementById('pay-note-one').value.trim();
+  const doSubmit=(receiptData)=>{
+    const payload={note};
+    if(receiptData) payload.receiptData=receiptData;
+    api('/records/'+id+'/pay',{method:'POST',body:JSON.stringify(payload)}).then(({ok,j})=>{
+      if(!ok){ alert(j.error||'打款失败'); return; }
+      closeModal();
+      alert('已打款 · '+fmtM(j.amount)+' 元');
+      loadRecords();
+    }).catch(()=>alert('网络错误'));
+  };
+  if(file){
+    compressImage(file).then(doSubmit).catch(()=>alert('凭证压缩失败，请重试'));
+  } else {
+    doSubmit(null);
+  }
 }
 
 function closeModal(){ const m=document.querySelector('.modal-mask'); if(m) m.remove(); }
