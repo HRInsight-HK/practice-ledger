@@ -224,6 +224,104 @@ router.post('/', async (req, res) => {
   });
 });
 
+// ==================== 拼单批量提交（免登录） ====================
+// 场景：一人点单付款，收齐大家的打卡截图后一次性提交
+// body: { date, dept1, dept2, sharedCount, order:{orderTime,doneTime,orderNo,amount},
+//        members:[{name, punchTime, punchDate, ali, aliname}, ...] }
+router.post('/group', async (req, res) => {
+  const { date, dept1, dept2, sharedCount, order, members } = req.body || {};
+
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: '请选择用餐日期' });
+  if (!dept1) return res.status(400).json({ error: '请填写一级部门' });
+  if (!order || !order.orderTime || !order.orderNo || !(Number(order.amount) > 0)) {
+    return res.status(400).json({ error: '订单截图识别失败，请重新上传清晰的外卖订单截图' });
+  }
+  const n = Math.max(1, parseInt(sharedCount) || 1);
+  if (!Array.isArray(members) || !members.length) return res.status(400).json({ error: '请填写就餐人员' });
+  if (members.length !== n) {
+    return res.status(400).json({ error: '就餐人数（' + n + '）与填写的人员数（' + members.length + '）不一致' });
+  }
+
+  // 逐人校验
+  const names = [];
+  for (let i = 0; i < members.length; i++) {
+    const m = members[i] || {};
+    const nm = String(m.name || '').trim();
+    if (!nm) return res.status(400).json({ error: '第 ' + (i + 1) + ' 位同事的姓名未填写' });
+    if (names.includes(nm)) return res.status(400).json({ error: '姓名重复：' + nm + '，请检查' });
+    names.push(nm);
+    if (!m.punchTime || !m.punchDate) {
+      return res.status(400).json({ error: nm + ' 的打卡截图识别失败，请重新上传' });
+    }
+    if (!String(m.ali || '').trim() || !String(m.aliname || '').trim()) {
+      return res.status(400).json({ error: '请填写 ' + nm + ' 的支付宝账号与实名姓名' });
+    }
+  }
+
+  const data = getData();
+  if (!data.dinnerRecords) data.dinnerRecords = [];
+
+  // 逐人判定；本批已处理的人也要计入订单总额锁与同人重复校验
+  const batch = [];
+  const results = [];
+  for (const m of members) {
+    const form = {
+      name: String(m.name).trim(),
+      dept1: String(dept1).trim(),
+      dept2: String(dept2 || '').trim(),
+      date,
+      ali: String(m.ali).trim(),
+      aliname: String(m.aliname).trim(),
+      sharedCount: n
+    };
+    const ai = {
+      orderTime: String(order.orderTime).trim(),
+      doneTime: String(order.doneTime || order.orderTime).trim(),
+      orderNo: String(order.orderNo).trim(),
+      amount: Number(order.amount),
+      punchTime: String(m.punchTime).trim(),
+      punchDate: String(m.punchDate).trim()
+    };
+    const result = judge(form, ai, data.dinnerRecords.concat(batch));
+    const entry = {
+      id: 'D' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      ...form,
+      ai,
+      status: result.status,
+      channel: result.channel,
+      amount: result.amount,
+      reason: result.reason,
+      weekUsed: result.used || 0,
+      sharedCount: n,
+      groupNo: 'G' + Date.now().toString(36),
+      orderClaimed: (result.orderClaimed || 0) + (result.amount > 0 ? result.amount : 0),
+      createdAt: new Date().toISOString()
+    };
+    batch.push(entry);
+    results.push({
+      name: entry.name, id: entry.id, pass: result.status.startsWith('PASS'),
+      status: result.status, channel: result.channel, amount: result.amount,
+      reason: result.reason, weekUsed: result.used || 0
+    });
+  }
+
+  // 同一批共享 groupNo，便于后台追溯
+  const groupNo = batch.length ? batch[0].groupNo : null;
+  batch.forEach(b => { b.groupNo = groupNo; });
+
+  data.dinnerRecords.push(...batch);
+  await saveData();
+
+  const passCount = results.filter(r => r.pass).length;
+  res.json({
+    success: true, groupNo, sharedCount: n,
+    perHead: Math.floor(Math.min(Number(order.amount) / n, 25) * 10) / 10,
+    totalAmount: results.reduce((s, r) => s + r.amount, 0),
+    passCount, failCount: results.length - passCount,
+    results
+  });
+});
+
 // ==================== 台账（登录可见） ====================
 router.get('/records', authMiddleware, (req, res) => {
   const data = getData();
