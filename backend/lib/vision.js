@@ -133,112 +133,106 @@ async function recognize(imageBuffer, kind) {
   const prompt = kind === 'punch' ? PUNCH_PROMPT : ORDER_PROMPT;
   const dataUrl = 'data:image/jpeg;base64,' + imageBuffer.toString('base64');
 
-  const body = {
+  const makeBody = (p) => ({
     model,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: dataUrl } }
-        ]
-      }
-    ],
+    messages: [{ role: 'user', content: [
+      { type: 'text', text: p },
+      { type: 'image_url', image_url: { url: dataUrl } }
+    ]}],
     temperature: 0,
     max_tokens: 500
+  });
+  const body = makeBody(prompt);
+  const strictPrompt = '只看图，严格只输出 JSON：{"orderTime":"HH:MM","doneTime":"HH:MM","orderNo":"string","amount":number,"confidence":0-100}（punch 类型为 {"punchDate":"YYYY-MM-DD","punchTime":"HH:MM","confidence":0-100}）。字段看不清就 null。无任何解释、Markdown、前缀。';
+  const strictBody = makeBody(strictPrompt);
+
+  const url = baseUrl.replace(/\/$/, '') + '/chat/completions';
+  // 免费模型有限速且高峰期会持续返回 429/1305，甚至返回 200 但 content 为空（高负载空响应）。
+  // 统一视为「繁忙」，采用更长退避：2s → 4s → 8s → 12s，最多 5 次。
+  const BACKOFFS = [2000, 4000, 8000, 12000];
+
+  // 发一次请求，返回 { content } / { busy } / { error }；429、503、200空content 都视为 busy
+  const callOnce = async (bdy) => {
+    let resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify(bdy)
+    });
+    if (resp.status === 429 || resp.status === 503) return { busy: true, status: resp.status };
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => '');
+      let msg = '视觉识别服务返回错误 ' + resp.status;
+      if (resp.status === 401) msg = '视觉识别密钥无效，请联系管理员检查配置';
+      else msg += '：' + txt.slice(0, 200);
+      const err = new Error(msg);
+      err.code = 'VISION_API_ERROR';
+      err.status = resp.status;
+      return { error: err };
+    }
+    const json = await resp.json().catch(() => null);
+    const content = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
+    if (!content || !String(content).trim()) return { busy: true, status: 200, empty: true };
+    return { content: String(content) };
   };
 
-  // 免费模型有限速且高峰期会持续返回 429/1305（实测需连续重试多次才通），
-  // 采用更长退避：2s → 4s → 8s → 12s，最多 5 次
-  const url = baseUrl.replace(/\/$/, '') + '/chat/completions';
-  const BACKOFFS = [2000, 4000, 8000, 12000];
-  let resp = null;
+  // 对一次识别做退避重试；连续 busy 时尝试切严格 prompt
+  let lastBusy = null;
   for (let attempt = 0; attempt <= BACKOFFS.length; attempt++) {
-    resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + apiKey
-      },
-      body: JSON.stringify(body)
-    });
-    if (resp.status !== 429 && resp.status !== 503) break;
-    if (attempt < BACKOFFS.length) await sleep(BACKOFFS[attempt]);
+    const useStrict = attempt >= 2;
+    const r = await callOnce(useStrict ? strictBody : body);
+    if (r.error) throw r.error;
+    if (r.busy) {
+      lastBusy = r;
+      if (attempt < BACKOFFS.length) await sleep(BACKOFFS[attempt]);
+      continue;
+    }
+    const parsed = parseJsonSafe(r.content);
+    if (!parsed) {
+      const strictParsed = await tryStrict(strictBody);
+      if (strictParsed) return buildResult(model, kind, strictParsed);
+      const preview = r.content.replace(/\s+/g, ' ').slice(0, 120);
+      const err = new Error('识别结果不是有效 JSON（智谱可能限速或繁忙）。原始返回：' + preview);
+      err.code = 'VISION_PARSE_FAIL';
+      err.raw = r.content.slice(0, 500);
+      throw err;
+    }
+    return buildResult(model, kind, parsed);
   }
 
-  if (!resp.ok) {
-    const txt = await resp.text().catch(() => '');
-    let msg = '视觉识别服务返回错误 ' + resp.status;
-    if (resp.status === 429) msg = '识别请求过于频繁（免费额度限速），请稍候 10 秒后重试';
-    else if (resp.status === 401) msg = '视觉识别密钥无效，请联系管理员检查配置';
-    else msg += '：' + txt.slice(0, 200);
-    const err = new Error(msg);
-    err.code = 'VISION_API_ERROR';
-    err.status = resp.status;
-    throw err;
-  }
+  const err = new Error(lastBusy && lastBusy.status === 429
+    ? '识别请求过于频繁（免费额度限速），请稍候 10 秒后重试'
+    : '识别服务繁忙（多次返回空结果），请稍候再试');
+  err.code = 'VISION_API_ERROR';
+  err.status = lastBusy ? lastBusy.status : 503;
+  throw err;
+}
 
-  const json = await resp.json();
-  const content = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
-  const parsed = parseJsonSafe(content);
-if (!parsed) {
-    // 模型返回非 JSON：常见于限速/繁忙时。自动让模型"自纠错"重答一次（换更严格的 prompt）
-    const strictPrompt = '只看图，严格只输出 JSON：{"orderTime":"HH:MM","doneTime":"HH:MM","orderNo":"string","amount":number,"confidence":0-100}（punch 类型为 {"punchDate":"YYYY-MM-DD","punchTime":"HH:MM","confidence":0-100}）。字段看不清就 null。无任何解释、Markdown、前缀。';
-    const retryBody = { ...body, messages: [{ role: 'user', content: [
-      { type: 'text', text: strictPrompt },
-      { type: 'image_url', image_url: { url: dataUrl } }
-    ]}]};
-    let retryParsed = null;
-    let retryContent = null;
-    for (let ra = 0; ra < 2; ra++) {
-      const retryResp = await fetch(url, {
+// 严格 prompt 自纠错重答（最多 2 次；429/空content 时小退避）
+async function tryStrict(strictBody) {
+  const url = (process.env.VISION_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '') + '/chat/completions';
+  const apiKey = process.env.VISION_API_KEY;
+  for (let ra = 0; ra < 2; ra++) {
+    let resp;
+    try {
+      resp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-        body: JSON.stringify(retryBody)
+        body: JSON.stringify(strictBody)
       });
-      if (retryResp.status === 429 || retryResp.status === 503) {
-        if (ra < 1) await sleep(2000);
-        continue;
-      }
-      if (!retryResp.ok) break;
-      const rj = await retryResp.json().catch(() => null);
-      retryContent = rj && rj.choices && rj.choices[0] && rj.choices[0].message && rj.choices[0].message.content;
-      retryParsed = parseJsonSafe(retryContent);
-      if (retryParsed) break;
-    }
-    if (retryParsed) {
-      const result = { model, confidence: retryParsed.confidence == null ? null : Number(retryParsed.confidence), raw: retryParsed };
-      if (kind === 'punch') {
-        result.punchDate = normDate(retryParsed.punchDate);
-        result.punchTime = normTime(retryParsed.punchTime);
-        if (!result.punchDate || !result.punchTime) {
-          const err = new Error('打卡截图识别不完整，需能看清打卡日期与时间');
-          err.code = 'VISION_INCOMPLETE';
-          err.partial = result;
-          throw err;
-        }
-      } else {
-        result.orderTime = normTime(retryParsed.orderTime);
-        result.doneTime = normTime(retryParsed.doneTime) || result.orderTime;
-        result.orderNo = retryParsed.orderNo ? String(retryParsed.orderNo).trim() : null;
-        result.amount = retryParsed.amount == null ? null : Number(String(retryParsed.amount).replace(/[^\d.]/g, ''));
-        if (!result.orderTime || !result.orderNo || !result.amount) {
-          const err = new Error('外卖截图识别不完整，需能看清下单时间、订单号、实付金额');
-          err.code = 'VISION_INCOMPLETE';
-          err.partial = result;
-          throw err;
-        }
-      }
-      return result;
-    }
-
-    const preview = String(retryContent || content || '').replace(/\s+/g, ' ').slice(0, 120);
-    const err = new Error('识别结果不是有效 JSON（智谱可能限速或繁忙）。原始返回：' + preview);
-    err.code = 'VISION_PARSE_FAIL';
-    err.raw = String(content || '').slice(0, 500);
-    throw err;
+    } catch (e) { await sleep(1500); continue; }
+    if (resp.status === 429 || resp.status === 503) { if (ra < 1) await sleep(2000); continue; }
+    if (!resp.ok) return null;
+    const rj = await resp.json().catch(() => null);
+    const content = rj && rj.choices && rj.choices[0] && rj.choices[0].message && rj.choices[0].message.content;
+    if (!content || !String(content).trim()) { if (ra < 1) await sleep(1500); continue; }
+    const parsed = parseJsonSafe(content);
+    if (parsed) return parsed;
   }
+  return null;
+}
 
+// 把解析结果规整成最终识别结果（订单/打卡共用）
+function buildResult(model, kind, parsed) {
   const result = { model, confidence: parsed.confidence == null ? null : Number(parsed.confidence), raw: parsed };
   if (kind === 'punch') {
     result.punchDate = normDate(parsed.punchDate);
