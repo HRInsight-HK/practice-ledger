@@ -156,9 +156,22 @@ const ST={PASS_A:['通过','g'],PASS_B:['通过','g'],PASS_CAPPED:['通过(封�
   FAIL_WEEKCAP:['不通过(周满)','r'],FAIL_ORDERCAP:['不通过(单满)','r'],FAIL_MANUAL:['人工驳回','r']};
 const RV={pendingVerify:['待识别','b'],pendingManual:['待人工审核','a'],verified:['已核验','g'],rejected:['已驳回','r']};
 
-function api(path,opts){ const h={'Content-Type':'application/json'};
+function api(path,opts){
+  opts=opts||{}; const h={'Content-Type':'application/json'};
   const t=localStorage.getItem(TOKEN_KEY); if(t) h['Authorization']='Bearer '+t;
-  return fetch('/api/dinner'+path,{...opts,headers:{...h,...(opts&&opts.headers||{})}}).then(r=>r.json().then(j=>({ok:r.ok,j})));
+  // 内部创建一个 ctl：能被超时和外部 signal 触发
+  const ctl=opts.signal || new AbortController();
+  if(!opts.signal) opts.signal=ctl;
+  // 识别类接口给 60s 超时（智谱限速时连续退避 + 几次调用容易超过 30s）
+  const timeoutMs = opts.timeout || (/\/recognize/.test(path) ? 60000 : 30000);
+  const timer=setTimeout(()=>{
+    ctl.abort();
+    const e=new Error('请求超时（'+Math.round(timeoutMs/1000)+'秒）'); e.name='AbortError';
+    // 这里只 abort fetch，不主动 reject；让 fetch 的 abort 走 reject
+  }, timeoutMs);
+  return fetch('/api/dinner'+path,{...opts,headers:{...h,...(opts.headers||{})}})
+    .then(r=>r.json().then(j=>({ok:r.ok,j})))
+    .finally(()=>clearTimeout(timer));
 }
 
 function doLogin(){
@@ -232,7 +245,7 @@ function renderLedger(){
     const punchState = r.punchImgData ? '已存' : (r.punchImg ? '⚠️丢失' : '无');
     const orderTag = r.orderImgData ? '<span class="pill g" style="font-size:11px;padding:2px 6px;">已存</span>' : (r.orderImg ? '<span class="pill r" style="font-size:11px;padding:2px 6px;">已丢失</span>' : '<span style="color:var(--sub);font-size:11px;">无</span>');
     const punchTag = r.punchImgData ? '<span class="pill g" style="font-size:11px;padding:2px 6px;">已存</span>' : (r.punchImg ? '<span class="pill r" style="font-size:11px;padding:2px 6px;">已丢失</span>' : '<span style="color:var(--sub);font-size:11px;">无</span>');
-    const proofs=(r.orderImgData||r.orderImg?'<div style="margin-bottom:4px;">'+orderTag+' <img class="proof-thumb" src="'+esc(proofSrc(r,'orderImg'))+'" title="订单证明图 '+orderState+'" onclick="viewImg(\''+esc(proofSrc(r,'orderImg'))+'\')"></div>':'')+(r.punchImgData||r.punchImg?'<div>'+punchTag+' <img class="proof-thumb" src="'+esc(proofSrc(r,'punchImg'))+'" title="打卡证明图 '+punchState+'" onclick="viewImg(\''+esc(proofSrc(r,'punchImg'))+'\')"></div>':'');
+    const proofs=(r.orderImgData||r.orderImg?'<div style="margin-bottom:4px;">'+orderTag+' <img class="proof-thumb" src="'+esc(proofSrc(r,'orderImg'))+'" title="订单证明图 '+orderState+'（点击看大图）" onclick="viewImg(this.src)"></div>':'')+(r.punchImgData||r.punchImg?'<div>'+punchTag+' <img class="proof-thumb" src="'+esc(proofSrc(r,'punchImg'))+'" title="打卡证明图 '+punchState+'（点击看大图）" onclick="viewImg(this.src)"></div>':'');
     // 员工填写 vs 识别结果
     const f=r.fields||{};
     const a=r.ai||{};
@@ -240,8 +253,8 @@ function renderLedger(){
     const aiCell=(a.orderTime||'—')+(a.orderNo?'<br>订单号 '+esc(a.orderNo):'')+(a.amount?'<br>'+fmtM(a.amount)+' 元':'')+(a.confidence!=null?'<br><span style="color:var(--sub)">置信 '+a.confidence+'%</span>':'');
     // 操作按钮（收集到 opsList，后续渲染到屏幕右侧固定浮窗，无论怎么横向滚动数据列都可见）
     let ops='<button class="del" onclick="delRec(\''+r.id+'\')">删除</button>';
-    if(r.reviewStatus==='pendingVerify') ops+=' <button class="btn small ghost" onclick="recognizeOne('+r.id+')">🤖 识别</button>';
-    if(r.reviewStatus==='pendingManual') ops+=' <button class="btn small ghost" onclick="recognizeOne(\''+r.id+'\')">🔁 重新识别</button> <button class="btn small green" onclick="openReview(\''+r.id+'\')">人工审核</button>';
+    if(r.reviewStatus==='pendingVerify') ops+=' <button class="btn small ghost" data-recon-id="'+r.id+'" onclick="recognizeOne(\''+r.id+'\')">🤖 识别</button>';
+    if(r.reviewStatus==='pendingManual') ops+=' <button class="btn small ghost" data-recon-id="'+r.id+'" onclick="recognizeOne(\''+r.id+'\')">🔁 重新识别</button> <button class="btn small green" onclick="openReview(\''+r.id+'\')">人工审核</button>';
     if(r.reviewStatus==='verified' && !r.paid) ops+=' <button class="btn small green" onclick="openPayOne(\''+r.id+'\',\''+esc(r.name)+'\','+r.amount+')">💰 打款</button>';
     if(r.paid) ops+=' <button class="del" style="color:var(--sub);border-color:transparent;" onclick="unpayRec(\''+r.id+'\')">撤回</button>';
     opsList.push(ops);
@@ -301,15 +314,57 @@ function onCheckChange(){
 function toggleAll(on){ document.querySelectorAll('.row-check').forEach(c=>{ c.checked=on; }); onCheckChange(); }
 
 // ==================== 识别 ====================
+// 用 id 锁定当前 DOM 里的按钮（避免 fetch 异步期间 loadRecords 重建 DOM，旧 btn 引用 orphan）
+const _reconState = {};  // id -> {orig, abortCtl}
+function _reconGetBtn(id){
+  // 优先找台账里的按钮（#tbl-...），其次找 ops-rail 里的（浮层按钮没 id，只能按 data-id 兜底）
+  return document.querySelector('[data-recon-id="'+id+'"]');
+}
 function recognizeOne(id){
-  const btn=event&&event.target; const orig=btn?btn.textContent:'🤖 识别';
+  // 防止重复点击：如果上一次还没结束，直接拒绝
+  if(_reconState[id]){ return; }
+  const btn=_reconGetBtn(id);
+  const orig=btn?btn.textContent:'🤖 识别';
   if(btn){ btn.disabled=true; btn.textContent='识别中…'; }
-  api('/records/'+id+'/recognize',{method:'POST'}).then(({ok,j})=>{
-    if(btn){ btn.disabled=false; btn.textContent=orig; }
-    if(ok){ alert(j.matched?'✅ 识别一致，自动判定：'+(j.status||'')+'，可报 '+fmtM(j.amount)+' 元':'⚠️ 有差异，已转人工审核：\n'+(j.differences||[]).join('\n')); }
-    else { alert('识别失败：'+(j.error||'')); }
+  const ctl=new AbortController();
+  _reconState[id]={orig, abortCtl:ctl};
+  api('/records/'+id+'/recognize',{method:'POST',signal:ctl.signal}).then(({ok,j})=>{
+    const b2 = _reconGetBtn(id); if(b2){ b2.disabled=false; b2.textContent=_reconState[id].orig||orig; }
+    delete _reconState[id];
+    if(ok){
+      if(j.matched){
+        alert('✅ 识别一致，自动判定：'+(j.status||'')+'，可报 '+fmtM(j.amount)+' 元');
+      } else {
+        alert('⚠️ 有差异，已转人工审核：\n'+(j.differences||[]).join('\n'));
+      }
+    } else {
+      // 详细失败原因
+      const code=j&&j.code||'';
+      const status=j&&j.status||'';
+      let tip='';
+      let canManual=true;
+      if(code==='NO_VISION_KEY'){ tip='\n\n原因：未配置视觉识别密钥。'; canManual=false; }
+      else if(code==='VISION_API_ERROR' && status===429) tip='\n\n原因：智谱免费模型限速（429）。建议：等 1-2 分钟再点「🔁 重新识别」';
+      else if(code==='VISION_API_ERROR' && status===503) tip='\n\n原因：智谱服务繁忙（503）。建议：稍后再试';
+      else if(code==='VISION_API_ERROR' && status===401){ tip='\n\n原因：API 密钥失效。请联系管理员'; canManual=false; }
+      else if(code==='VISION_PARSE_FAIL') tip='\n\n原因：识别返回内容不是有效 JSON。建议：直接人工审核';
+      else if(code==='IMAGE_MISSING') tip='\n\n原因：图片已丢失（部署重启清空）。建议：让员工重新提交';
+      else tip='\n\n建议：稍后再点「🔁 重新识别」，或直接人工审核';
+      const msg='❌ 识别失败：'+(j&&j.error||'未知错误')+tip;
+      // 失败时直接给「去人工审核」入口，用户不用回到表格找按钮
+      if(canManual && typeof openReview==='function' && confirm(msg+'\n\n是否现在进入「人工审核」手动核对？')){
+        openReview(id);
+      } else {
+        alert(msg);
+      }
+    }
     loadRecords();
-  }).catch(()=>{ if(btn){btn.disabled=false;btn.textContent=orig;} alert('网络错误'); });
+  }).catch(err=>{
+    const b2 = _reconGetBtn(id); if(b2){ b2.disabled=false; b2.textContent=_reconState[id].orig||orig; }
+    delete _reconState[id];
+    if(err&&err.name==='AbortError') return;
+    alert('网络错误：'+(err&&err.message||err));
+  });
 }
 function recognizeAllPending(){
   const pvs=records.filter(r=>r.reviewStatus==='pendingVerify');
@@ -365,8 +420,8 @@ function openReview(id){
             <div style="font-size:12.5px;">下单 ${esc(a.orderTime||'—')}<br>订单号 ${esc(a.orderNo||'—')}<br>实付 ${fmtM(a.amount||0)} 元<br>打卡 ${esc(a.punchTime||'—')} ${esc(a.punchDate||'')}</div></div>
         </div>
         <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-          ${(r.orderImgData||r.orderImg)?'<a href="'+esc(proofSrc(r,'orderImg'))+'" target="_blank"><img src="'+esc(proofSrc(r,'orderImg'))+'" style="max-width:200px;max-height:140px;border-radius:6px;border:1px solid var(--line)"></a>':''}
-          ${(r.punchImgData||r.punchImg)?'<a href="'+esc(proofSrc(r,'punchImg'))+'" target="_blank"><img src="'+esc(proofSrc(r,'punchImg'))+'" style="max-width:200px;max-height:140px;border-radius:6px;border:1px solid var(--line)"></a>':''}
+          ${(r.orderImgData||r.orderImg)?'<img src="'+esc(proofSrc(r,'orderImg'))+'" title="点击查看大图" style="max-width:200px;max-height:140px;border-radius:6px;border:1px solid var(--line);cursor:zoom-in" onclick="viewImg(this.src)">':''}
+          ${(r.punchImgData||r.punchImg)?'<img src="'+esc(proofSrc(r,'punchImg'))+'" title="点击查看大图" style="max-width:200px;max-height:140px;border-radius:6px;border:1px solid var(--line);cursor:zoom-in" onclick="viewImg(this.src)">':''}
         </div>
         <div style="margin-bottom:10px;"><label>核对后修正字段（不填则用员工填写/识别值）</label>
           <div class="grid2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -407,7 +462,24 @@ function reviewAction(id, action){
   }).catch(()=>{ alert('网络错误'); });
 }
 
-function viewImg(url){ window.open(url,'_blank'); }
+// ==================== 图片预览（弹窗，替代 window.open，data URL 也能开）====================
+let _imgZoom=1;
+function viewImg(url){
+  if(!url) return;
+  const el=document.getElementById('img-modal');
+  if(!el) return;
+  const img=el.querySelector('img');
+  img.src=url; img.style.transform='scale(1)';
+  _imgZoom=1;
+  el.style.display='flex';
+}
+function closeImg(){ const el=document.getElementById('img-modal'); if(!el) return; el.style.display='none'; el.querySelector('img').src=''; }
+function zoomImg(delta){ _imgZoom=Math.max(0.5, Math.min(4, _imgZoom+delta)); const img=document.querySelector('#img-modal img'); if(img) img.style.transform='scale('+_imgZoom+')'; }
+document.addEventListener('keydown', e=>{
+  if(e.key==='Escape') closeImg();
+  if(e.key==='+'||e.key==='=') zoomImg(0.25);
+  if(e.key==='-') zoomImg(-0.25);
+});
 
 function delRec(id){
   if(!confirm('确认删除这条提交记录？删除后其周累计额度也会释放。')) return;
@@ -601,5 +673,16 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   t.classList.add('on'); document.getElementById('p-'+t.dataset.t).classList.add('on');
 });
 </script>
+
+<!-- 图片预览弹窗：替代 window.open，data URL 也能正常显示 -->
+<div id="img-modal" onclick="if(event.target===this)closeImg()" style="position:fixed;inset:0;background:rgba(0,0,0,.78);display:none;align-items:center;justify-content:center;z-index:9999;cursor:zoom-out;">
+  <div onclick="event.stopPropagation()" style="position:absolute;top:10px;right:14px;display:flex;gap:8px;">
+    <button onclick="zoomImg(-0.25)" style="background:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:14px;">−</button>
+    <button onclick="zoomImg(0.25)" style="background:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:14px;">+</button>
+    <button onclick="closeImg()" style="background:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:14px;">✕ 关闭</button>
+  </div>
+  <img onclick="event.stopPropagation()" src="" style="max-width:90vw;max-height:88vh;border-radius:6px;background:#fff;cursor:default;transform-origin:center center;transition:transform .15s;" />
+</div>
+<script>document.getElementById('img-modal').addEventListener('wheel',e=>{ if(e.deltaY){ e.preventDefault(); zoomImg(e.deltaY>0?-0.25:0.25); } }, {passive:false});</script>
 </body>
 </html>

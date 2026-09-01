@@ -276,7 +276,7 @@ router.post('/records/:id/recognize', authMiddleware, requireRole('admin', 'hr')
     await saveData().catch(() => {});
     res.status(code === 'NO_VISION_KEY' ? 503 : 200).json({
       success: false, id: r.id, reviewStatus: 'pendingManual',
-      matched: false, error: e.message, code, imageMissing,
+      matched: false, error: e.message, code, status: e.status || null, imageMissing,
       configured: vision.configured()
     });
   }
