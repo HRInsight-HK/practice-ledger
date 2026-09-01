@@ -46,8 +46,11 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 
 app.use(express.json({ limit: '30mb' })); // 晚餐报销证明图以 base64 存库，需要更大 body 上限
 // 静态文件禁缓存：HR 反复看到"空表"，最大嫌疑是浏览器缓存了旧版页面
+// 注意：/dinner-admin 这类无后缀路由不在 .endsWith('.html') 里，要单独覆盖
 app.use((req, res, next) => {
-  if (req.path === '/' || req.path.endsWith('.html')) {
+  const p = req.path;
+  const isPage = p === '/' || p.endsWith('.html') || /^\/(dinner-admin|dinner|admin)(\/|$)/.test(p);
+  if (isPage) {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
@@ -123,10 +126,11 @@ app.get('/invite', (req, res) => {
 
 // 晚餐报销试用模块：员工提交（免登录）+ SSC 台账后台
 app.get('/dinner', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dinner.html'));
+  // cacheControl:false 让 send 不覆盖上面中间件设置的 no-store 头（否则 sendFile 默认 public, max-age=0）
+  res.sendFile(path.join(__dirname, 'public', 'dinner.html'), { cacheControl: false });
 });
 app.get('/dinner-admin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dinner-admin.html'));
+  res.sendFile(path.join(__dirname, 'public', 'dinner-admin.html'), { cacheControl: false });
 });
 
 app.get('*', (req, res) => {
