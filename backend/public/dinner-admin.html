@@ -159,17 +159,30 @@ const RV={pendingVerify:['待识别','b'],pendingManual:['待人工审核','a'],
 function api(path,opts){
   opts=opts||{}; const h={'Content-Type':'application/json'};
   const t=localStorage.getItem(TOKEN_KEY); if(t) h['Authorization']='Bearer '+t;
-  // 内部创建一个 ctl：能被超时和外部 signal 触发
-  const ctl=opts.signal || new AbortController();
-  if(!opts.signal) opts.signal=ctl;
+  // 始终用 AbortSignal（不要传 AbortController 实例，夸克/旧 Chromium 不自动转换）
+  let signal = opts.signal;
+  let ctl = null;
+  if (signal && typeof signal.aborted === 'boolean') {
+    // 调用方已传 signal（AbortSignal），直接用
+  } else {
+    ctl = new AbortController();
+    signal = ctl.signal;
+    opts.signal = signal;
+  }
   // 识别类接口给 60s 超时（智谱限速时连续退避 + 几次调用容易超过 30s）
   const timeoutMs = opts.timeout || (/\/recognize/.test(path) ? 60000 : 30000);
   const timer=setTimeout(()=>{
-    ctl.abort();
-    const e=new Error('请求超时（'+Math.round(timeoutMs/1000)+'秒）'); e.name='AbortError';
+    if (ctl) ctl.abort();
     // 这里只 abort fetch，不主动 reject；让 fetch 的 abort 走 reject
   }, timeoutMs);
-  return fetch('/api/dinner'+path,{...opts,headers:{...h,...(opts.headers||{})}})
+  // method/body 也要带过去
+  const fetchOpts = {
+    method: opts.method || 'GET',
+    headers: { ...h, ...(opts.headers||{}) },
+    signal: signal
+  };
+  if (opts.method && opts.method !== 'GET' && opts.body !== undefined) fetchOpts.body = opts.body;
+  return fetch('/api/dinner'+path, fetchOpts)
     .then(r=>r.json().then(j=>({ok:r.ok,j})))
     .finally(()=>clearTimeout(timer));
 }
