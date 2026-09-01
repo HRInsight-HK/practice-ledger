@@ -193,6 +193,17 @@ function enterMain(){
   const u=JSON.parse(localStorage.getItem(USER_KEY)||'{}');
   document.getElementById('who').textContent=(u.name||'')+'（'+(u.username||'')+'）';
   loadRecords();
+  // 检查后台是否有正在进行的识别任务（如：刷新页面 / 关闭后重开，自动续上）
+  api('/recognize-queue/status').then(({ok,j})=>{
+    if(ok && j && j.active && j.total > 0){
+      showReconQueueModal(j.total);
+      updateReconQueueModal(j);
+      renderReconLogs(j.log || []);
+      const el = document.getElementById('rq-log'); if(el && j.log && j.log.length) el.dataset.lastTs = j.log[j.log.length-1].ts || '';
+      modalLog('检测到后台识别任务 ' + j.jobId + '，已处理 ' + j.done + '/' + j.total + '，自动续上');
+      startReconPoll();
+    }
+  }).catch(()=>{});
 }
 function logout(){ localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); location.reload(); }
 
@@ -314,7 +325,7 @@ function onCheckChange(){
 function toggleAll(on){ document.querySelectorAll('.row-check').forEach(c=>{ c.checked=on; }); onCheckChange(); }
 
 // ==================== 识别 ====================
-// 用 id 锁定当前 DOM 里的按钮（避免 fetch 异步期间 loadRecords 重建 DOM，旧 btn 引用 orphan）
+// 单条识别：用 id 锁定当前 DOM 里的按钮（避免 fetch 异步期间 loadRecords 重建 DOM，旧 btn 引用 orphan）
 const _reconState = {};  // id -> {orig, abortCtl}
 function _reconGetBtn(id){
   // 优先找台账里的按钮（#tbl-...），其次找 ops-rail 里的（浮层按钮没 id，只能按 data-id 兜底）
@@ -338,13 +349,12 @@ function recognizeOne(id){
         alert('⚠️ 有差异，已转人工审核：\n'+(j.differences||[]).join('\n'));
       }
     } else {
-      // 详细失败原因
       const code=j&&j.code||'';
       const status=j&&j.status||'';
       let tip='';
       let canManual=true;
       if(code==='NO_VISION_KEY'){ tip='\n\n原因：未配置视觉识别密钥。'; canManual=false; }
-      else if(code==='VISION_API_ERROR' && status===429) tip='\n\n原因：智谱免费模型限速（429）。建议：等 1-2 分钟再点「🔁 重新识别」';
+      else if(code==='VISION_API_ERROR' && status===429) tip='\n\n原因：智谱免费模型限速（429）。建议：使用「🤖 识别全部待核验」后台队列，会自动等候限速恢复再继续';
       else if(code==='VISION_API_ERROR' && status===503) tip='\n\n原因：智谱服务繁忙（503）。建议：稍后再试';
       else if(code==='VISION_API_ERROR' && status===401){ tip='\n\n原因：API 密钥失效。请联系管理员'; canManual=false; }
       else if(code==='VISION_PARSE_FAIL') tip='\n\n原因：识别返回内容不是有效 JSON。建议：直接人工审核';
@@ -366,27 +376,154 @@ function recognizeOne(id){
     alert('网络错误：'+(err&&err.message||err));
   });
 }
+
+// ==================== 识别队列（后台顺序、限速感知）====================
+// 「识别全部待核验」按钮入口：调 /recognize-queue/start，后台顺序处理；弹窗实时显示进度。
+// 单条间 2.5s 间隔；遇 429 自动停 30s 再继续；关浏览器也能跑（重启页面会自动重连）。
+let _rqPollTimer = null;
 function recognizeAllPending(){
-  const pvs=records.filter(r=>r.reviewStatus==='pendingVerify');
-  const groups=[...new Set(pvs.map(r=>r.groupNo).filter(Boolean))];
+  const pvs = records.filter(r => r.reviewStatus === 'pendingVerify' || r.reviewStatus === 'pendingManual');
   if(!pvs.length){ alert('没有待识别的记录'); return; }
-  if(!confirm('将识别 '+pvs.length+' 条待核验记录，识别一致自动通过，有差异转人工审核。继续？')) return;
-  // 按整单逐个识别
-  let done=0;
-  const run=groups.concat(pvs.filter(r=>!r.groupNo).map(r=>r.id));
-  const seq=(arr)=>{ if(!arr.length){ loadRecords(); alert('识别完成'); return; }
-    const g=arr.shift();
-    const apiCall= g.startsWith('G')
-      ? api('/group/'+g+'/recognize',{method:'POST'})
-      : api('/records/'+g+'/recognize',{method:'POST'});
-    apiCall.finally(()=>seq(arr));
+  if(!confirm('将启动后台识别队列，处理 ' + pvs.length + ' 条待核验记录（含待识别与待人工）。\n\n顺序处理，单条间隔 2.5 秒；遇到智谱免费模型限速（429）会自动等候 30 秒再继续。你可随时点「停止」或关闭浏览器（任务会继续）。\n\n继续？')) return;
+  api('/recognize-queue/start', { method: 'POST' }).then(({ok,j})=>{
+    if(!ok){
+      if(j && j.status && j.status.active){
+        // 已有任务在跑：直接打开弹窗轮询
+        showReconQueueModal(j.status.total);
+        updateReconQueueModal(j.status);
+        modalLog('已有任务在进行（jobId ' + j.status.jobId + '，已处理 ' + j.status.done + '/' + j.status.total + '），继续轮询');
+        startReconPoll();
+      } else {
+        alert('启动失败：' + (j && j.error || '未知错误'));
+      }
+    } else {
+      showReconQueueModal(j.total);
+      modalLog('已启动任务 ' + j.jobId + '，共 ' + j.total + ' 条');
+      startReconPoll();
+    }
+  }).catch(err=>{
+    alert('网络错误：' + (err && err.message || err));
+  });
+}
+function startReconPoll(){
+  if(_rqPollTimer) clearTimeout(_rqPollTimer);
+  const tick = () => {
+    api('/recognize-queue/status').then(({ok,j})=>{
+      if(!ok){ modalLog('轮询失败：' + (j && j.error || '')); _rqPollTimer = setTimeout(tick, 3000); return; }
+      updateReconQueueModal(j);
+      // 显示新增的日志条目
+      if(j.log && j.log.length){
+        // 这里只追加最新的若干条；增量追加可以更优雅，但简单起见每次刷新滚动到底部
+        const el = document.getElementById('rq-log');
+        if(el && !el.dataset.lastTs){
+          // 首次进入：渲染所有现有 log
+          renderReconLogs(j.log);
+          el.dataset.lastTs = j.log[j.log.length-1].ts || '';
+        } else if(j.log.length){
+          const lastTs = el.dataset.lastTs;
+          // 找出 lastTs 之后的条目（按 ts 字符串比较）
+          const newOnes = j.log.filter(x => x.ts > lastTs);
+          if(newOnes.length){ newOnes.forEach(l => appendReconLog(l)); el.dataset.lastTs = j.log[j.log.length-1].ts; }
+        }
+      }
+      if(j.active){
+        _rqPollTimer = setTimeout(tick, 1500);
+      } else {
+        modalLog('✅ 任务结束：成功 ' + j.success + ' / 差异转人工 ' + j.mismatch + ' / 失败 ' + j.failed + ' / 跳过 ' + j.skipped);
+        // 3 秒后自动关闭弹窗并刷新台账
+        setTimeout(()=>{ closeReconQueueModal(); loadRecords(); }, 3000);
+      }
+    }).catch(()=>{ _rqPollTimer = setTimeout(tick, 3000); });
   };
-  // 简化：直接逐条识别（整单接口同样可用，这里用单条更稳妥）
-  const ids=pvs.map(r=>r.id);
-  const runSeq=(list)=>{ if(!list.length){ loadRecords(); alert('识别完成'); return; }
-    api('/records/'+list.shift()+'/recognize',{method:'POST'}).finally(()=>runSeq(list));
-  };
-  runSeq(ids.slice());
+  tick();
+}
+function stopReconQueue(){
+  if(_rqPollTimer) clearTimeout(_rqPollTimer);
+  modalLog('已请求停止…');
+  api('/recognize-queue/stop', { method: 'POST' }).then(({ok,j})=>{
+    if(ok){ modalLog('⏹ 已停止（已处理 ' + (j && j.status && j.status.done) + '/' + (j && j.status && j.status.total) + '）'); loadRecords(); }
+    else modalLog('停止失败：' + (j && j.error));
+  }).catch(e=>modalLog('停止网络错误：' + (e.message||e)));
+}
+function showReconQueueModal(total){
+  if(document.getElementById('recon-q-modal')) return; // 防止重复打开
+  const html = `
+    <div class="modal-mask" id="recon-q-modal" onclick="if(event.target===this)closeReconQueueModal(true)">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:580px;">
+        <h3>🤖 智能识别队列（${total} 条）</h3>
+        <p style="font-size:13px;color:var(--sub);margin-bottom:10px;">后台顺序处理 · 单条间隔 2.5 秒 · 遇限速自动等候 30 秒。关浏览器也能继续。</p>
+        <div id="rq-progress" style="background:#f9fafb;border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span id="rq-current" style="font-weight:600;">初始化…</span>
+            <span id="rq-counter" style="font-size:13px;color:var(--sub);">0 / ${total}</span>
+          </div>
+          <div style="height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden;">
+            <div id="rq-bar" style="height:8px;background:linear-gradient(90deg,#2563eb,#10b981);width:0%;transition:width .3s;"></div>
+          </div>
+          <div id="rq-summary" style="font-size:12.5px;margin-top:8px;color:var(--sub);"></div>
+        </div>
+        <div id="rq-log" style="max-height:200px;overflow-y:auto;font-size:12px;background:#0f172a;color:#e2e8f0;padding:10px;border-radius:6px;font-family:ui-monospace,Consolas,monospace;line-height:1.55;"></div>
+        <div style="text-align:right;margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn small warn" onclick="stopReconQueue()">⏹ 停止</button>
+          <button class="btn small ghost" onclick="closeReconQueueModal(true)">隐藏（后台继续）</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+function updateReconQueueModal(s){
+  const curEl = document.getElementById('rq-current');
+  const counterEl = document.getElementById('rq-counter');
+  const barEl = document.getElementById('rq-bar');
+  const sumEl = document.getElementById('rq-summary');
+  if(!curEl || !counterEl || !barEl || !sumEl) return;
+  if(s.active){
+    if(s.currentName) curEl.textContent = '正在识别：' + s.currentName + '（' + s.currentId + '）';
+    else curEl.textContent = '准备识别…';
+  } else if(s.done > 0){
+    curEl.textContent = '已完成';
+  } else {
+    curEl.textContent = '等待启动…';
+  }
+  counterEl.textContent = s.done + ' / ' + s.total;
+  const pct = s.total ? Math.round(s.done / s.total * 100) : 0;
+  barEl.style.width = pct + '%';
+  sumEl.innerHTML = '✅ 成功 <b>' + s.success + '</b>　⚠️ 差异转人工 <b>' + s.mismatch + '</b>　❌ 失败 <b>' + s.failed + '</b>　⏭ 跳过 <b>' + s.skipped + '</b>';
+}
+function renderReconLogs(logs){
+  const el = document.getElementById('rq-log');
+  if(!el) return;
+  el.innerHTML = logs.map(formatLogLine).join('');
+  el.scrollTop = el.scrollHeight;
+}
+function appendReconLog(l){
+  const el = document.getElementById('rq-log');
+  if(!el) return;
+  el.insertAdjacentHTML('beforeend', formatLogLine(l));
+  el.scrollTop = el.scrollHeight;
+}
+function formatLogLine(l){
+  const t = (l.ts || '').slice(11,19);
+  if(l.action === 'start') return '[' + t + '] ▶ 识别 ' + (l.name||'') + '（' + l.id + '）';
+  if(l.action === 'ok') return '[' + t + '] ✓ ' + (l.name||'') + ' · ' + (l.kind==='matched'?'自动通过':(l.kind==='mismatch'?'差异转人工':'跳过'));
+  if(l.action === 'fail') return '[' + t + '] ✗ ' + (l.name||'') + ' · ' + (l.code||'') + (l.status?' ('+l.status+')':'') + ' · ' + (l.error||'').slice(0,60);
+  if(l.action === 'skip_done') return '[' + t + '] ⏭ 跳过已核验记录 ' + l.id;
+  if(l.msg) return '[' + t + '] ' + l.msg;
+  return '[' + t + '] ' + JSON.stringify(l);
+}
+function modalLog(msg){
+  const el = document.getElementById('rq-log');
+  if(!el){ console.log('[recon-queue]', msg); return; }
+  const t = new Date().toLocaleTimeString();
+  el.insertAdjacentHTML('beforeend', '<div>[' + t + '] ' + msg + '</div>');
+  el.scrollTop = el.scrollHeight;
+}
+function closeReconQueueModal(refresh){
+  const m = document.getElementById('recon-q-modal');
+  if(m) m.remove();
+  if(_rqPollTimer){ clearTimeout(_rqPollTimer); _rqPollTimer = null; }
+  if(refresh) loadRecords();
 }
 
 // 一键标记图片已丢失的待识别记录为待人工审核

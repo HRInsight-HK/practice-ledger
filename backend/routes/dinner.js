@@ -430,6 +430,162 @@ router.post('/records/:id/manual-review', authMiddleware, requireRole('admin', '
   });
 });
 
+// ==================== 后台识别队列（顺序 + 限速感知）====================
+// 需求：免费模型限速时并发识别会全部 429；改成单条顺序、遇 429 自动停 30 秒再继续。
+// 后台内存态保留当前任务；前端轮询 status 看到实时进度，关闭浏览器也能继续。
+let _reconJob = {
+  active: false, jobId: null,
+  queue: [], currentId: null, currentName: null,
+  done: 0, success: 0, mismatch: 0, failed: 0, skipped: 0,
+  errors: [], log: [],
+  startedAt: null, finishedAt: null,
+  abortCtl: null
+};
+function _sleepWithAbort(ms, signal){
+  return new Promise((resolve, reject) => {
+    if (signal && signal.aborted) return reject(new Error('aborted'));
+    const t = setTimeout(() => {
+      if (signal) signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => { clearTimeout(t); reject(new Error('aborted')); };
+    if (signal) signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+// 把一条记录按现状处理（用于队列：内部不再二次判状态，逻辑集中到 recognizeOne）
+async function _processOne(r, data, ctl){
+  if (ctl && ctl.signal && ctl.signal.aborted) throw new Error('aborted');
+  const orderBuf = readImgBuffer(r, 'orderImg');
+  const punchBuf = readImgBuffer(r, 'punchImg');
+  // 图片全丢失：直接转人工
+  const orderHas = !!(r.orderImgData || r.orderImg);
+  const punchHas = !!(r.punchImgData || r.punchImg);
+  if ((orderHas && !orderBuf) || (punchHas && !punchBuf) || (!orderBuf && !punchBuf)) {
+    const missing = [];
+    if (orderHas && !orderBuf) missing.push('订单图');
+    if (punchHas && !punchBuf) missing.push('打卡图');
+    r.reviewStatus = 'pendingManual';
+    r.verifyInfo = {
+      matched: false, code: 'IMAGE_MISSING', imageMissing: true, missing,
+      error: '图片已丢失：' + missing.join('、') + '（部署重启清空），请员工重新提交',
+      differences: ['图片已丢失，请员工重新提交'],
+      decidedAt: new Date().toISOString()
+    };
+    return { result: 'skipped_image_missing' };
+  }
+  const out = await recognizeOne(data, r);
+  return { result: out.matched ? 'matched' : 'mismatch', out };
+}
+router.post('/recognize-queue/start', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
+  if (_reconJob.active) {
+    return res.json({ success: false, error: '已有识别任务在进行（jobId ' + _reconJob.jobId + '，已处理 ' + _reconJob.done + '/' + _reconJob.queue.length + '）', status: _queueStatusPublic() });
+  }
+  const data = getData();
+  const targets = (data.dinnerRecords || []).filter(r =>
+    r.reviewStatus === 'pendingVerify' || r.reviewStatus === 'pendingManual');
+  if (!targets.length) return res.json({ success: false, error: '没有待识别的记录' });
+
+  _reconJob = {
+    active: true,
+    jobId: 'Q' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6).toUpperCase(),
+    queue: targets.map(r => r.id),
+    currentId: null, currentName: null,
+    done: 0, success: 0, mismatch: 0, failed: 0, skipped: 0,
+    errors: [], log: [{ ts: new Date().toISOString(), msg: '任务启动，共 ' + targets.length + ' 条' }],
+    startedAt: new Date().toISOString(), finishedAt: null,
+    abortCtl: new AbortController()
+  };
+
+  // 后台执行（异步、不阻塞响应）
+  (async () => {
+    for (const id of _reconJob.queue) {
+      const ctlSignal = _reconJob.abortCtl && _reconJob.abortCtl.signal;
+      if (ctlSignal && ctlSignal.aborted) break;
+      _reconJob.currentId = id;
+      const rec = (data.dinnerRecords || []).find(x => x.id === id);
+      if (!rec) { _reconJob.failed++; _reconJob.done++; continue; }
+      _reconJob.currentName = rec.name;
+      _reconJob.log.push({ ts: new Date().toISOString(), id, name: rec.name, action: 'start' });
+      // 已通过/已驳回 —— 跳过（防御：用户可能在队列运行中并发了单条识别）
+      if (rec.reviewStatus === 'verified' || rec.reviewStatus === 'rejected') {
+        _reconJob.skipped++; _reconJob.done++;
+        _reconJob.log.push({ ts: new Date().toISOString(), id, action: 'skip_done' });
+        continue;
+      }
+      try {
+        const out = await _processOne(rec, data, _reconJob.abortCtl);
+        await saveData();
+        if (out.result === 'matched') _reconJob.success++;
+        else if (out.result === 'mismatch') _reconJob.mismatch++;
+        else _reconJob.skipped++;
+        _reconJob.log.push({ ts: new Date().toISOString(), id, name: rec.name, action: 'ok', kind: out.result });
+      } catch (e) {
+        const code = e.code || 'VISION_ERROR';
+        const status = e.status || null;
+        const aborted = e.message === 'aborted';
+        _reconJob.errors.push({ id, name: rec.name, code, status, error: e.message });
+        _reconJob.log.push({ ts: new Date().toISOString(), id, name: rec.name, action: 'fail', code, status, aborted });
+        if (aborted) break;
+        // 限速：等 30 秒再进入下一条（智谱免费额度冷却通常 30-60s）
+        if (code === 'VISION_API_ERROR' && status === 429) {
+          _reconJob.log.push({ ts: new Date().toISOString(), msg: '检测到限速（429），自动等候 30 秒再继续' });
+          try { await _sleepWithAbort(30000, _reconJob.abortCtl.signal); }
+          catch (_) { break; }
+        }
+        await saveData().catch(() => {});
+        _reconJob.failed++;
+      }
+      _reconJob.done++;
+      // 条间间隔：避免下一条立即又撞上限速（智谱免费模型通常 1-2 QPS）
+      if (!(_reconJob.abortCtl.signal && _reconJob.abortCtl.signal.aborted)) {
+        try { await _sleepWithAbort(2500, _reconJob.abortCtl.signal); }
+        catch (_) { break; }
+      }
+    }
+    _reconJob.active = false;
+    _reconJob.currentId = null;
+    _reconJob.currentName = null;
+    _reconJob.finishedAt = new Date().toISOString();
+    _reconJob.log.push({ ts: new Date().toISOString(), msg: '任务结束：成功 ' + _reconJob.success + ' / 差异转人工 ' + _reconJob.mismatch + ' / 失败 ' + _reconJob.failed + ' / 跳过 ' + _reconJob.skipped });
+  })().catch(e => {
+    _reconJob.active = false;
+    _reconJob.errors.push({ id: null, name: '(queue)', code: 'QUEUE', error: e.message });
+    _reconJob.finishedAt = new Date().toISOString();
+  });
+
+  res.json({ success: true, jobId: _reconJob.jobId, total: _reconJob.queue.length });
+});
+function _queueStatusPublic(){
+  const data = getData();
+  const cur = (_reconJob.currentId && (data.dinnerRecords || []).find(x => x.id === _reconJob.currentId)) || null;
+  return {
+    active: _reconJob.active,
+    jobId: _reconJob.jobId,
+    total: _reconJob.queue.length,
+    done: _reconJob.done,
+    success: _reconJob.success,
+    mismatch: _reconJob.mismatch,
+    failed: _reconJob.failed,
+    skipped: _reconJob.skipped,
+    currentId: _reconJob.currentId,
+    currentName: cur ? cur.name : (_reconJob.currentName || null),
+    startedAt: _reconJob.startedAt,
+    finishedAt: _reconJob.finishedAt,
+    errors: _reconJob.errors.slice(-20),
+    log: _reconJob.log.slice(-30)
+  };
+}
+router.get('/recognize-queue/status', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
+  res.json(_queueStatusPublic());
+});
+router.post('/recognize-queue/stop', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
+  if (!_reconJob.active) return res.json({ success: false, error: '没有正在进行的识别任务', status: _queueStatusPublic() });
+  if (_reconJob.abortCtl) _reconJob.abortCtl.abort();
+  _reconJob.active = false;
+  _reconJob.finishedAt = new Date().toISOString();
+  res.json({ success: true, stopped: true, status: _queueStatusPublic() });
+});
+
 // ==================== 一键诊断：标记图片已丢失的旧记录为待人工 ====================
 // Render 临时盘清空后，旧记录（base64 改造前的）证明图已无法读取。
 // 这条接口把这类记录批量置为 pendingManual + 标注 imageMissing，避免每次手动触发识别都浪费智谱配额。
