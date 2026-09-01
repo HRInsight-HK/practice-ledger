@@ -45,6 +45,15 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 
 app.use(express.json({ limit: '30mb' })); // 晚餐报销证明图以 base64 存库，需要更大 body 上限
+// 静态文件禁缓存：HR 反复看到"空表"，最大嫌疑是浏览器缓存了旧版页面
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path.endsWith('.html')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(UPLOADS_DIR));
 

@@ -214,9 +214,35 @@ if(localStorage.getItem(TOKEN_KEY)){
 }
 
 function loadRecords(){
-  api('/records').then(({ok,j})=>{
-    if(!ok){ if(j&&j.error&&j.error.includes('登录')){ localStorage.removeItem(TOKEN_KEY); location.reload(); } return; }
-    records=j.records||[]; renderLedger(); renderWeekly();
+  // 显示加载状态（之前如果 api 超时/失败，页面会一片空白——用户以为数据丢了）
+  const tbody = document.querySelector('#tbl tbody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="14" class="empty" style="padding:24px 0;">⏳ 加载中…</td></tr>';
+  document.getElementById('ledger-summary').textContent = '加载中…';
+  // 首次加载用 60s 超时（Render 免费版冷启动可能 30s+）
+  const isFirstLoad = !window._dinnerLoadedOnce;
+  api('/records', { timeout: isFirstLoad ? 60000 : 30000 }).then(({ok,j})=>{
+    if(!ok){
+      const msg = (j && j.error) || '未知错误';
+      if (msg.includes('登录') || msg.includes('token')) {
+        localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); location.reload(); return;
+      }
+      if (tbody) tbody.innerHTML = '<tr><td colspan="14" class="empty" style="padding:24px 0;color:var(--red);">❌ 加载失败：' + msg + '<br><br><button class="btn small ghost" onclick="loadRecords()">↻ 重试</button></td></tr>';
+      document.getElementById('ledger-summary').innerHTML = '<span style="color:var(--red)">加载失败</span>';
+      console.error('[loadRecords] 后端返回错误:', j);
+      return;
+    }
+    records = j.records || [];
+    window._dinnerLoadedOnce = true;
+    renderLedger(); renderWeekly();
+  }).catch(err=>{
+    if (err && err.name === 'AbortError') {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="14" class="empty" style="padding:24px 0;color:var(--red);">⏱️ 请求超时（Render 冷启动可能较慢）<br><br><button class="btn small ghost" onclick="loadRecords()">↻ 重试</button></td></tr>';
+      document.getElementById('ledger-summary').innerHTML = '<span style="color:var(--red)">请求超时</span>';
+      console.warn('[loadRecords] 超时，可点 ↻ 刷新 或 ↻ 顶栏 刷新 重试');
+    } else {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="14" class="empty" style="padding:24px 0;color:var(--red);">❌ 网络错误：' + (err && err.message || err) + '<br><br><button class="btn small ghost" onclick="loadRecords()">↻ 重试</button></td></tr>';
+      console.error('[loadRecords] 网络错误:', err);
+    }
   });
 }
 
