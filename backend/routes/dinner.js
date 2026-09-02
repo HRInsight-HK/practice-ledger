@@ -154,6 +154,10 @@ router.post('/group', async (req, res) => {
     const dept2 = (body.dept2 || '').trim();
     const sharedCount = parseInt(body.sharedCount) || 1;
     const members = Array.isArray(body.members) ? body.members : [];
+    // 新逻辑：拼单只有 1 人下单，报销款统一打给下单人；其他成员只核验打卡时间
+    const ordererIdxParsed = parseInt(body.ordererIdx, 10);
+    const ordererIdx = Number.isInteger(ordererIdxParsed) && ordererIdxParsed >= 0 && ordererIdxParsed < members.length
+      ? ordererIdxParsed : 0;
 
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: '请选择用餐日期' });
     if (!dept1) return res.status(400).json({ error: '请填写一级部门' });
@@ -177,7 +181,7 @@ router.post('/group', async (req, res) => {
     const punchB64 = punchData.map(d => dataUrlToB64(d));
     if (punchB64.some(b => !b)) return res.status(400).json({ error: '存在无效的打卡证明图，请重新上传' });
 
-    // 逐人校验
+    // 逐人校验（支付宝只收下单人的，其他人只验姓名与打卡图）
     const names = [];
     for (let i = 0; i < members.length; i++) {
       const m = members[i] || {};
@@ -185,8 +189,8 @@ router.post('/group', async (req, res) => {
       if (!nm) return res.status(400).json({ error: '第 ' + (i + 1) + ' 位同事的姓名未填写' });
       if (names.includes(nm)) return res.status(400).json({ error: '姓名重复：' + nm + '，请检查' });
       names.push(nm);
-      if (!String(m.ali || '').trim() || !String(m.aliname || '').trim()) {
-        return res.status(400).json({ error: '请填写 ' + nm + ' 的支付宝账号与实名姓名' });
+      if (i === ordererIdx && (!String(m.ali || '').trim() || !String(m.aliname || '').trim())) {
+        return res.status(400).json({ error: '请填写下单人 ' + nm + ' 的支付宝账号与实名姓名（报销款统一打给下单人）' });
       }
     }
 
@@ -211,8 +215,11 @@ router.post('/group', async (req, res) => {
         name: String(m.name).trim(),
         dept1, dept2: String(dept2 || '').trim(),
         date,
-        ali: String(m.ali).trim(),
-        aliname: String(m.aliname).trim(),
+        ali: i === ordererIdx ? String(m.ali).trim() : '',
+        aliname: i === ordererIdx ? String(m.aliname).trim() : '',
+        isOrderer: i === ordererIdx,          // 新逻辑：报销款统一打给下单人
+        ordererName: String((members[ordererIdx] || {}).name || '').trim(),
+        groupMembers: names,
         sharedCount,
         groupNo,
         fields,             // 员工填写（待核验）
@@ -640,22 +647,43 @@ router.post('/records/:id/pay', authMiddleware, requireRole('admin', 'hr'), asyn
   const data = getData();
   const r = (data.dinnerRecords || []).find(x => x.id === req.params.id);
   if (!r) return res.status(404).json({ error: '记录不存在' });
+  // 新逻辑：拼单报销款统一打给下单人，非下单人记录不能单独打款（优先于状态校验，提示更清晰）
+  if (r.isOrderer === false && r.groupNo) {
+    const orderer = (data.dinnerRecords || []).find(x => x.groupNo === r.groupNo && x.isOrderer === true);
+    return res.status(400).json({
+      error: '拼单记录打款统一走下单人 ' + (r.ordererName || (orderer && orderer.name) || '') +
+        '，请在下单人那一行点「💰 打款（整单）」'
+    });
+  }
   if (!r.status || !r.status.startsWith('PASS')) return res.status(400).json({ error: '仅通过的记录可标记打款' });
   const body = req.body || {};
   const note = String(body.note || '').toString().trim();
   const receiptB64 = dataUrlToB64(body.receiptData);
-  r.paid = true;
-  r.paidAt = new Date().toISOString();
-  r.paidBatchId = r.paidBatchId || ('B' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex'));
-  r.paidReceipt = {
-    type: receiptB64 ? 'image' : (note ? 'note' : null),
-    receiptData: receiptB64 || null,   // 持久化凭证（base64）
-    url: r.paidReceipt && r.paidReceipt.url ? r.paidReceipt.url : null,  // 兼容旧记录
-    note: note || ''
-  };
-  r.paidBy = req.user.username;
+  const now = new Date().toISOString();
+  const batchId = r.paidBatchId || ('B' + Date.now().toString(36) + crypto.randomBytes(2).toString('hex'));
+  // 下单人打款 = 整单一起结（同单已核验通过且未打款的成员记录全部标记）
+  const groupTargets = (r.isOrderer === true && r.groupNo)
+    ? (data.dinnerRecords || []).filter(x => x.groupNo === r.groupNo
+        && (!x.paid) && x.status && x.status.startsWith('PASS'))
+    : [r];
+  for (const g of groupTargets) {
+    g.paid = true;
+    g.paidAt = now;
+    g.paidBatchId = batchId;
+    g.paidReceipt = {
+      type: receiptB64 ? 'image' : (note ? 'note' : null),
+      receiptData: receiptB64 || null,   // 持久化凭证（base64）
+      url: g.paidReceipt && g.paidReceipt.url ? g.paidReceipt.url : null,  // 兼容旧记录
+      note: note || ''
+    };
+    g.paidBy = req.user.username;
+  }
   await saveData();
-  res.json({ success: true, id: r.id, paid: true, paidAt: r.paidAt, paidBatchId: r.paidBatchId });
+  res.json({
+    success: true, id: r.id, paid: true, paidAt: now, paidBatchId: batchId,
+    paidCount: groupTargets.length,
+    totalAmount: Math.round(groupTargets.reduce((s, g) => s + g.amount, 0) * 10) / 10
+  });
 });
 
 // ==================== 打款：批量（一次性给一人多笔） ====================
@@ -671,21 +699,37 @@ router.post('/records/batch-pay', authMiddleware, requireRole('admin', 'hr'), as
   const now = new Date().toISOString();
   const updated = [];
   const skipped = [];
+  const includedIds = new Set();   // 拼单整单打款去重
   for (const id of ids) {
     const r = (data.dinnerRecords || []).find(x => x.id === id);
     if (!r) { skipped.push({ id, reason: '记录不存在' }); continue; }
     if (!r.status || !r.status.startsWith('PASS')) { skipped.push({ id, reason: '非通过记录' }); continue; }
-    r.paid = true;
-    r.paidAt = now;
-    r.paidBatchId = batchId;
-    r.paidReceipt = {
-      type: receiptB64 ? 'image' : (note ? 'note' : null),
-      receiptData: receiptB64 || null,
-      url: r.paidReceipt && r.paidReceipt.url ? r.paidReceipt.url : null,
-      note: note || ''
-    };
-    r.paidBy = req.user.username;
-    updated.push({ id: r.id, amount: r.amount });
+    // 新逻辑：非下单人的拼单记录不能单独打款（统一走下单人整单打款）
+    if (r.isOrderer === false && r.groupNo) {
+      skipped.push({ id, reason: '拼单打款统一走下单人 ' + (r.ordererName || '') + ' 那一行' });
+      continue;
+    }
+    // 下单人 = 整单一起结（同单已核验通过且未打款的成员记录全部标记）
+    const groupTargets = (r.isOrderer === true && r.groupNo)
+      ? (data.dinnerRecords || []).filter(x => x.groupNo === r.groupNo
+          && (!x.paid) && x.status && x.status.startsWith('PASS'))
+      : [r];
+    for (const g of groupTargets) {
+      if (includedIds.has(g.id)) continue;   // 已被同单其他记录带过
+      if (g.paid) continue;
+      g.paid = true;
+      g.paidAt = now;
+      g.paidBatchId = batchId;
+      g.paidReceipt = {
+        type: receiptB64 ? 'image' : (note ? 'note' : null),
+        receiptData: receiptB64 || null,
+        url: g.paidReceipt && g.paidReceipt.url ? g.paidReceipt.url : null,
+        note: note || ''
+      };
+      g.paidBy = req.user.username;
+      includedIds.add(g.id);
+      updated.push({ id: g.id, amount: g.amount });
+    }
   }
   await saveData();
   res.json({
@@ -695,16 +739,112 @@ router.post('/records/batch-pay', authMiddleware, requireRole('admin', 'hr'), as
   });
 });
 
-// ==================== 取消打款标记（误点可撤回）====================
+// ==================== 取消打款标记（误点可撤回；拼单整单撤）====================
 router.post('/records/:id/unpay', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
   const data = getData();
   const r = (data.dinnerRecords || []).find(x => x.id === req.params.id);
   if (!r) return res.status(404).json({ error: '记录不存在' });
-  r.paid = false;
-  r.paidAt = null;
-  r.paidBy = null;
+  // 新式拼单（isOrderer 已定义）整单一起撤；旧记录保持单条撤回
+  const targets = (r.groupNo && r.isOrderer !== undefined)
+    ? (data.dinnerRecords || []).filter(x => x.groupNo === r.groupNo && x.paid)
+    : [r];
+  for (const g of targets) {
+    g.paid = false;
+    g.paidAt = null;
+    g.paidBy = null;
+  }
   await saveData();
-  res.json({ success: true, id: r.id, paid: false });
+  res.json({ success: true, id: r.id, paid: false, unpayCount: targets.length });
+});
+
+// ==================== 导出 Excel（每周归档，防数据膨胀）====================
+// 三个 sheet：台账明细（不含 base64 图片，体积小）/ 周汇总 / 待打款清单（按收款人聚合）
+router.get('/export', authMiddleware, requireRole('admin', 'hr'), (req, res) => {
+  const XLSX = require('xlsx');
+  const data = getData();
+  const list = (data.dinnerRecords || []).slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const RV_TXT = { pendingVerify: '待识别', pendingManual: '待人工审核', verified: '已核验', rejected: '已驳回' };
+  const ST_TXT = { PASS_A: '通过(通道A)', PASS_B: '通过(通道B)', PASS_CAPPED: '通过(封顶)',
+    FAIL_BLUR: '不通过(要素缺失)', FAIL_DATE: '不通过(日期不符)', FAIL_DUP: '不通过(重复)',
+    FAIL_TIME: '不通过(时间不符)', FAIL_WEEKCAP: '不通过(周满)', FAIL_ORDERCAP: '不通过(单满)', FAIL_MANUAL: '人工驳回' };
+
+  // ---- Sheet1 台账明细 ----
+  const detail = [['提交时间', '姓名', '角色', '拼单人员', '一级部门', '二级部门', '用餐日期',
+    '下单时间(填写)', '打卡时间(填写)', '订单号(填写)', '实付(填写)',
+    '下单时间(识别)', '打卡时间(识别)', '订单号(识别)', '实付(识别)',
+    '核验状态', '判定', '可报金额', '已打款', '打款时间', '打款批次', '收款支付宝', '收款实名', '原因/说明']];
+  for (const r of list) {
+    const f = r.fields || {}, a = r.ai || {};
+    detail.push([
+      (r.createdAt || '').replace('T', ' ').slice(0, 16),
+      r.name,
+      r.isOrderer === true ? '下单人' : (r.isOrderer === false ? '拼单成员' : '—'),
+      (r.groupMembers || []).join('、'),
+      r.dept1 || '', r.dept2 || '', r.date || '',
+      f.orderTime || '', f.punchTime || '', f.orderNo || '', f.amount || '',
+      a.orderTime || '', a.punchTime || '', a.orderNo || '', a.amount || '',
+      RV_TXT[r.reviewStatus] || r.reviewStatus || '—',
+      ST_TXT[r.status] || r.status || '—',
+      r.amount > 0 ? r.amount : 0,
+      r.paid ? '是' : '否',
+      r.paidAt ? r.paidAt.replace('T', ' ').slice(0, 16) : '',
+      r.paidBatchId || '',
+      r.ali || '', r.aliname || '',
+      r.reason || (r.verifyInfo && r.verifyInfo.differences ? r.verifyInfo.differences.join('；') : '')
+    ]);
+  }
+
+  // ---- Sheet2 周汇总（按人按周）----
+  const mondayOf = d => { const dt = new Date(d + 'T00:00:00'); const day = (dt.getDay() + 6) % 7; dt.setDate(dt.getDate() - day); return dt.toISOString().slice(0, 10); };
+  const weeklyMap = {};
+  for (const r of list) {
+    if (!r.date) continue;
+    const wk = mondayOf(r.date);
+    const key = r.name + '|' + wk;
+    if (!weeklyMap[key]) weeklyMap[key] = { name: r.name, week: wk, passN: 0, total: 0, paid: 0, unpaid: 0 };
+    const w = weeklyMap[key];
+    if (r.status && r.status.startsWith('PASS')) {
+      w.passN++; w.total += r.amount;
+      if (r.paid) w.paid += r.amount; else w.unpaid += r.amount;
+    }
+  }
+  const weekly = [['姓名', '所在周(周一)', '通过笔数', '累计可报', '已打款', '待打款']]
+    .concat(Object.values(weeklyMap).sort((a, b) => (a.week + a.name).localeCompare(b.week + b.name))
+      .map(w => [w.name, w.week, w.passN, Math.round(w.total * 10) / 10, Math.round(w.paid * 10) / 10, Math.round(w.unpaid * 10) / 10]));
+
+  // ---- Sheet3 待打款清单（按收款人聚合；拼单打给下单人）----
+  const payMap = {};
+  const order = [];
+  for (const r of list) {
+    if (!r.status || !r.status.startsWith('PASS') || r.paid) continue;
+    const isGroup = r.groupNo && r.isOrderer !== undefined;
+    if (isGroup && r.isOrderer === false) continue;   // 非下单人跳过（随下单人整单打）
+    const key = (r.ali || '') + '|' + (r.aliname || r.name);
+    if (!payMap[key]) { payMap[key] = { ali: r.ali || '(未填)', aliname: r.aliname || r.name, n: 0, amt: 0, dates: [] }; order.push(key); }
+    const p = payMap[key];
+    p.n++; p.amt += r.amount; if (r.date) p.dates.push(r.date);
+    // 拼单：整单成员的可报金额都归到下单人
+    if (isGroup && r.isOrderer === true) {
+      for (const g of list) {
+        if (g.groupNo === r.groupNo && g.id !== r.id && g.status && g.status.startsWith('PASS') && !g.paid) {
+          p.n++; p.amt += g.amount; if (g.date) p.dates.push(g.date);
+        }
+      }
+    }
+  }
+  const pending = [['收款人', '支付宝账号', '笔数', '合计金额', '涉及日期']]
+    .concat(order.map(k => { const p = payMap[k];
+      return [p.aliname, p.ali, p.n, Math.round(p.amt * 10) / 10, [...new Set(p.dates)].sort().join('、')]; }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detail), '台账明细');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(weekly), '周汇总');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pending), '待打款清单');
+  const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  const fname = '晚餐报销台账_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(fname));
+  res.send(buf);
 });
 
 module.exports = router;

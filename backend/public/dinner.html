@@ -59,7 +59,7 @@
     <div class="desc">提交后由后台审核，无需等待 · 报销款随本周结算支付宝转账</div>
   </header>
 
-  <div class="steps">提交流程：<b>①</b> 选人数、填姓名 → <b>②</b> 填订单信息 → <b>③</b> 传 1 张订单证明图 + N 张打卡证明图 → <b>④</b> 填每人支付宝 → 提交</div>
+  <div class="steps">提交流程：<b>①</b> 选人数、填姓名、指定下单人 → <b>②</b> 填订单信息 → <b>③</b> 传 1 张订单证明图 + N 张打卡证明图 → <b>④</b> 填下单人支付宝 → 提交</div>
 
   <div class="rules">
     <div class="rule"><b>19:30</b><span>外卖下单 ≥ 19:30 直接可报</span></div>
@@ -81,12 +81,14 @@
         <option value="5">5 人拼单</option>
         <option value="6">6 人拼单</option>
       </select></div>
+      <div><label>下单人是谁（收款人）<em>*</em></label><select id="f-orderer" onchange="renderPayInfo()"></select></div>
       <div><label>一级部门 <em>*</em></label><input id="f-dept1" placeholder="如：行政部"></div>
       <div><label>二级部门（选填）</label><input id="f-dept2" placeholder="如：行政一组"></div>
       <div><label>用餐日期 <em>*</em></label><input type="date" id="f-date"></div>
     </div>
     <div class="opt" style="margin-top:10px;">就餐人员姓名（按人数填写，用于分摊与匹配）：</div>
     <div id="member-names" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:6px;"></div>
+    <div class="opt" style="margin-top:8px;">💡 拼单只有 1 人下单，报销款<b>统一打给下单人</b>，其余同事只需上传打卡截图核验加班时间。</div>
   </div>
 
   <div class="card">
@@ -115,9 +117,9 @@
   </div>
 
   <div class="card">
-    <h3>④ 收款信息（每人）</h3>
+    <h3>④ 收款信息（仅下单人）</h3>
     <div id="pay-list"></div>
-    <div class="tip" style="margin-top:10px;">💡 请填<b>真实姓名</b>，姓名与账号不符转账会退回。</div>
+    <div class="tip" style="margin-top:10px;">💡 报销款<b>统一打给下单人</b>，只填下单人的支付宝即可；拼单同事之间请自行分摊。</div>
   </div>
 
   <button class="btn" id="btn-submit" onclick="submitGroup()">提交</button>
@@ -166,7 +168,7 @@ function renderMembers(){
   const oldPunch = {};
   document.querySelectorAll('.punch-owner').forEach(s=>{ oldPunch[s.dataset.idx] = s.value; });
 
-  let nh='', ph='', yh='';
+  let nh='', ph='';
   for(let i=0;i<cnt;i++){
     nh += '<div><label>第 '+(i+1)+' 位姓名 <em>*</em></label><input class="m-name" data-idx="'+i+'" value="'+(old[i]||'')+'" placeholder="如：张三" oninput="syncOwners()"></div>';
     ph += '<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;background:#fafbfc;">'
@@ -182,17 +184,11 @@ function renderMembers(){
        + '</div>'
        + '<div class="up" id="punch-zone-'+i+'" style="margin-top:8px;" onclick="pickPunch('+i+')">📷 上传打卡证明图<img id="punch-prev-'+i+'" style="display:none"></div>'
        + '</div>';
-    yh += '<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;background:#fafbfc;">'
-       + '<div id="pay-title-'+i+'" style="font-size:13px;font-weight:600;margin-bottom:6px;">第 '+(i+1)+' 位收款信息</div>'
-       + '<div class="grid2">'
-       + '<div><label>支付宝账号 <em>*</em></label><input class="m-ali" data-idx="'+i+'" placeholder="手机号或邮箱"></div>'
-       + '<div><label>支付宝实名姓名 <em>*</em></label><input class="m-aliname" data-idx="'+i+'" placeholder="真实姓名"></div>'
-       + '</div></div>';
   }
   namesEl.innerHTML = nh;
   punchEl.innerHTML = ph;
-  payEl.innerHTML = yh;
   syncOwners();
+  renderPayInfo();
   // 保留已选打卡图
   Object.keys(PUNCH_IMG).forEach(k=>{ if(PUNCH_IMG[k]&&PUNCH_IMG[k].dataUrl){ const img=document.getElementById('punch-prev-'+k); const zn=document.getElementById('punch-zone-'+k); if(img){img.src=PUNCH_IMG[k].dataUrl;img.style.display='block';} if(zn) zn.classList.add('has-img'); } });
 }
@@ -204,11 +200,34 @@ function syncOwners(){
     sel.innerHTML = names.map((nm,k)=>'<option value="'+k+'"'+(String(k)===cur?' selected':'')+'>'+nm+'</option>').join('');
     if(cur===''||cur==null) sel.value=String(i);
   });
-  document.querySelectorAll('#pay-list > div').forEach((d,k)=>{
-    const t=d.querySelector('div'); if(t) t.textContent='第 '+(k+1)+' 位收款信息'+(names[k]&&names[k].indexOf('第 ')===0?'':'（'+names[k]+'）');
-  });
+  // 下单人下拉同步姓名
+  const ordSel=document.getElementById('f-orderer');
+  if(ordSel){
+    const cur=ordSel.value;
+    ordSel.innerHTML = names.map((nm,k)=>'<option value="'+k+'"'+(String(k)===cur?' selected':'')+'>'+nm+'</option>').join('');
+    if(cur===''||cur==null) ordSel.value='0';
+  }
+  // 收款人标题跟着姓名变（支付宝输入值保留）
+  renderPayInfo();
 }
 function refreshOwners(){}
+// ④ 收款信息：只渲染下单人一份（支付宝账号+实名）
+function renderPayInfo(){
+  const payEl = document.getElementById('pay-list');
+  const ordSel = document.getElementById('f-orderer');
+  const idx = parseInt(ordSel && ordSel.value) || 0;
+  const names=[...document.querySelectorAll('.m-name')].map(i=>i.value.trim());
+  const nm = (names[idx] || ('第 '+(idx+1)+' 位'));
+  const aliEl = document.getElementById('f-ali'), alinameEl = document.getElementById('f-aliname');
+  const keepAli = aliEl ? aliEl.value : '';
+  const keepName = alinameEl ? alinameEl.value : '';
+  payEl.innerHTML = '<div style="border:1px solid var(--line);border-radius:8px;padding:12px;background:#fafbfc;">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">收款人（下单人）：'+nm+'</div>'
+    + '<div class="grid2">'
+    + '<div><label>支付宝账号 <em>*</em></label><input id="f-ali" placeholder="手机号或邮箱" value="'+keepAli+'"></div>'
+    + '<div><label>支付宝实名姓名 <em>*</em></label><input id="f-aliname" placeholder="真实姓名" value="'+keepName+'"></div>'
+    + '</div></div>';
+}
 
 function pickPunch(i){ document.getElementById('punch-file-'+i).click(); }
 
@@ -236,6 +255,9 @@ function collect(){
   const names=[...document.querySelectorAll('.m-name')].map(i=>i.value.trim());
   const owners=[...document.querySelectorAll('.punch-owner')].map(s=>parseInt(s.value));
   const cnt=n();
+  const ordererIdx = parseInt(document.getElementById('f-orderer').value) || 0;
+  const ali=(document.getElementById('f-ali')||{}).value||'';
+  const aliname=(document.getElementById('f-aliname')||{}).value||'';
   const members=[];
   for(let k=0;k<cnt;k++){
     const idx=owners.indexOf(k);           // 哪张打卡图归这个人
@@ -244,11 +266,11 @@ function collect(){
       punchTime:(document.querySelector('.m-ptime[data-idx="'+k+'"]')||{}).value||'',
       punchDate:(document.querySelector('.m-pdate[data-idx="'+k+'"]')||{}).value||'',
       punchFile: (idx>=0 && PUNCH_IMG[idx] && PUNCH_IMG[idx].dataUrl) || null,
-      ali:(document.querySelector('.m-ali[data-idx="'+k+'"]')||{}).value||'',
-      aliname:(document.querySelector('.m-aliname[data-idx="'+k+'"]')||{}).value||''
+      ali: k===ordererIdx ? ali : '',       // 只收下单人的支付宝
+      aliname: k===ordererIdx ? aliname : ''
     });
   }
-  return members;
+  return { members, ordererIdx };
 }
 
 function submitGroup(){
@@ -270,18 +292,24 @@ function submitGroup(){
   const orderFile=ORDER_IMG.dataUrl;
   if(!orderFile){ err.textContent='请上传 1 张外卖订单证明截图'; err.className='err show'; return; }
 
-  const members=collect();
+  const {members, ordererIdx}=collect();
   for(let i=0;i<members.length;i++){
     const m=members[i];
     if(!m.name){ err.textContent='请填写第 '+(i+1)+' 位同事的姓名'; err.className='err show'; return; }
     if(!m.punchFile){ err.textContent='请为 '+m.name+' 上传 1 张打卡证明截图'; err.className='err show'; return; }
-    if(!m.ali.trim()||!m.aliname.trim()){ err.textContent='请填写 '+m.name+' 的支付宝账号与实名姓名'; err.className='err show'; return; }
+  }
+  // 支付宝只验证下单人
+  const orderer=members[ordererIdx]||members[0];
+  if(!orderer.ali.trim()||!orderer.aliname.trim()){
+    err.textContent='请填写下单人（收款人）'+orderer.name+' 的支付宝账号与实名姓名';
+    err.className='err show'; return;
   }
 
   // JSON 提交（图片为 dataURL，后端 base64 存库）
   const payload={
     date, dept1, dept2,
     sharedCount:members.length,
+    ordererIdx,
     orderTime, doneTime, orderNo, amount,
     orderData:ORDER_IMG.dataUrl,
     punchData:members.map(m=>m.punchFile),

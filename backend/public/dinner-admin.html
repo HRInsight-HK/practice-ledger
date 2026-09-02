@@ -136,7 +136,7 @@
           <button class="btn small green" id="btn-recognize-all" onclick="recognizeAllPending()">🤖 识别全部待核验</button>
           <button class="btn small ghost" id="btn-batch-pay" onclick="openBatchPay()" disabled>💰 批量打款（0）</button>
           <button class="btn small ghost" onclick="loadRecords()">↻ 刷新</button>
-          <button class="btn small ghost" onclick="exportCSV()">⬇ 导出 CSV</button>
+          <button class="btn small ghost" onclick="exportExcel()">⬇ 导出 Excel</button>
         </div>
         <div style="position:relative;">
           <div class="scroll"><table id="tbl"><thead><tr>
@@ -306,12 +306,20 @@ function renderLedger(){
   document.querySelector('#tbl tbody').innerHTML=list.map(r=>{
     const [txt,cls]=ST[r.status]||['—','b'];
     const [rvtxt,rvcls]=RV[r.reviewStatus]||['—','b'];
-    const canCheck=r.status&&r.status.startsWith('PASS')&&!r.paid&&r.reviewStatus==='verified';
-    const ck=canCheck?'<input type="checkbox" class="row-check" data-id="'+r.id+'" data-name="'+esc(r.name)+'" data-amount="'+r.amount+'" onchange="onCheckChange()">':'<span style="color:var(--sub)">—</span>';
+    // 新逻辑：拼单报销款统一打给下单人，非下单人记录不单独勾选/打款
+    const isNewGroup = r.groupNo && r.isOrderer !== undefined;
+    const isNonOrderer = isNewGroup && r.isOrderer === false;
+    // 拼单整单可打金额 = 同单所有已核验通过且未打款的成员金额合计
+    const groupPayable = (isNewGroup && r.isOrderer === true)
+      ? records.filter(x=>x.groupNo===r.groupNo && x.status && x.status.startsWith('PASS') && !x.paid && x.reviewStatus==='verified')
+          .reduce((s,x)=>s+x.amount,0)
+      : r.amount;
+    const canCheck=r.status&&r.status.startsWith('PASS')&&!r.paid&&r.reviewStatus==='verified'&&!isNonOrderer;
+    const ck=canCheck?'<input type="checkbox" class="row-check" data-id="'+r.id+'" data-name="'+esc(r.name)+'" data-amount="'+(isNewGroup&&r.isOrderer===true?groupPayable:r.amount)+'" onchange="onCheckChange()">':(isNonOrderer?'<span class="pill p" style="font-size:10px;" title="拼单打款统一走下单人">随下单人</span>':'<span style="color:var(--sub)">—</span>');
     const rs=receiptSrc(r);
     const paidCell=r.paid
       ? '<span class="pill g" title="'+(r.paidAt||'')+'">已打款</span> '+(rs?'<a href="'+esc(rs.href)+'" target="_blank" class="receipt-link">凭证</a>':'')
-      : '<span class="pill b">未打款</span>';
+      : (isNonOrderer ? '<span class="pill p" title="拼单打款统一走下单人">随下单人</span>' : '<span class="pill b">未打款</span>');
     // 证明图缩略（优先库内 base64，回退 URL）+ 图片状态徽标
     const orderState = r.orderImgData ? '已存' : (r.orderImg ? '⚠️丢失' : '无');
     const punchState = r.punchImgData ? '已存' : (r.punchImg ? '⚠️丢失' : '无');
@@ -327,10 +335,10 @@ function renderLedger(){
     let ops='<button class="del" onclick="delRec(\''+r.id+'\')">删除</button>';
     if(r.reviewStatus==='pendingVerify') ops+=' <button class="btn small ghost" data-recon-id="'+r.id+'" onclick="recognizeOne(\''+r.id+'\')">🤖 识别</button>';
     if(r.reviewStatus==='pendingManual') ops+=' <button class="btn small ghost" data-recon-id="'+r.id+'" onclick="recognizeOne(\''+r.id+'\')">🔁 重新识别</button> <button class="btn small green" onclick="openReview(\''+r.id+'\')">人工审核</button>';
-    if(r.reviewStatus==='verified' && !r.paid) ops+=' <button class="btn small green" onclick="openPayOne(\''+r.id+'\',\''+esc(r.name)+'\','+r.amount+')">💰 打款</button>';
+    if(r.reviewStatus==='verified' && !r.paid && !isNonOrderer) ops+=' <button class="btn small green" onclick="openPayOne(\''+r.id+'\',\''+esc(r.name)+'\','+(isNewGroup&&r.isOrderer===true?groupPayable:r.amount)+')">'+(isNewGroup&&r.isOrderer===true?'💰 打款整单':'💰 打款')+'</button>';
     if(r.paid) ops+=' <button class="del" style="color:var(--sub);border-color:transparent;" onclick="unpayRec(\''+r.id+'\')">撤回</button>';
     opsList.push(ops);
-    return '<tr><td>'+ck+'</td><td>'+r.createdAt.replace('T',' ').slice(0,16)+'</td><td><b>'+esc(r.name)+'</b></td><td>'+esc(r.dept1)+(r.dept2?' / '+esc(r.dept2):'')+'</td><td>'+r.date+'</td>'+
+    return '<tr><td>'+ck+'</td><td>'+r.createdAt.replace('T',' ').slice(0,16)+'</td><td><b>'+esc(r.name)+'</b>'+(isNewGroup?'<br><span class="pill '+(r.isOrderer?'g':'p')+'" style="font-size:10px;">'+(r.isOrderer?'下单人':'拼单成员')+'</span>':'')+(r.sharedCount>1&&!isNewGroup?'<br><span style="color:var(--sub);font-size:11px;">'+r.sharedCount+'人拼单</span>':'')+'</td><td>'+esc(r.dept1)+(r.dept2?' / '+esc(r.dept2):'')+'</td><td>'+r.date+'</td>'+
       '<td><span class="pill '+rvcls+'">'+rvtxt+'</span></td>'+
       '<td>'+proofs+'</td>'+
       '<td style="white-space:normal;max-width:150px;">'+orderCell+'</td>'+
@@ -338,7 +346,7 @@ function renderLedger(){
       '<td><span class="pill '+cls+'">'+txt+'</span></td>'+
       '<td class="money '+(r.status==='PASS_CAPPED'?'cap':'')+'">'+(r.amount>0?fmtM(r.amount)+' 元':'—')+'</td>'+
       '<td style="white-space:normal; max-width:240px;">'+(r.verifyInfo&&r.verifyInfo.imageMissing?'<span class="pill r">🖼️ 图片已丢失</span> 请员工重新提交':esc(r.reason||(r.verifyInfo&&r.verifyInfo.differences?('⚠️ '+r.verifyInfo.differences.join('；')):'')))+'</td>'+
-      '<td style="white-space:normal;">'+esc(r.ali)+'<br>'+esc(r.aliname)+'</td>'+
+      '<td style="white-space:normal;">'+(isNonOrderer?'<span style="color:var(--sub)">随下单人<br>'+esc(r.ordererName||'')+'收款</span>':esc(r.ali)+(r.aliname?'<br>'+esc(r.aliname):''))+'</td>'+
       '<td style="white-space:normal; min-width:120px;">'+paidCell+'</td>'+
       '</tr>';
   }).join('')||'<tr><td colspan="14" class="empty">暂无记录</td></tr>';
@@ -694,7 +702,7 @@ function openPayOne(id, name, amount){
     <div class="modal-mask" onclick="closeModal(event)">
       <div class="modal" onclick="event.stopPropagation()">
         <h3>💰 打款 · ${esc(name)} · ${fmtM(amount)} 元</h3>
-        <p style="font-size:13px;color:var(--sub);margin-bottom:10px;">上传本次转账截图（PNG/JPG/WEBP，可选），系统会把凭证 base64 存库（Render 重启不会丢），便于对账。</p>
+        <p style="font-size:13px;color:var(--sub);margin-bottom:10px;">${amount!==undefined&&records.find(x=>x.id===id&&x.isOrderer===true)?'拼单整单打款：这一单所有已核验通过的成员金额会一起结算给下单人。':''}上传本次转账截图（可选），系统会把凭证 base64 存库（Render 重启不会丢），便于对账。</p>
         <div style="margin-top:12px;"><label>打款凭证截图（可选）</label><input type="file" id="pay-receipt-one" accept="image/*"></div>
         <div style="margin-top:10px;"><label>备注（可选）</label><input id="pay-note-one" placeholder="例如：支付宝转账 2026-08-29"></div>
         <div style="margin-top:14px;text-align:right;">
@@ -714,7 +722,7 @@ function submitPayOne(id){
     api('/records/'+id+'/pay',{method:'POST',body:JSON.stringify(payload)}).then(({ok,j})=>{
       if(!ok){ alert(j.error||'打款失败'); return; }
       closeModal();
-      alert('已打款 · '+fmtM(j.amount)+' 元');
+      alert('已打款 · '+(j.paidCount>1?('整单 '+j.paidCount+' 条，合计 '):'')+fmtM(j.totalAmount!=null?j.totalAmount:j.amount)+' 元');
       loadRecords();
     }).catch(()=>alert('网络错误'));
   };
@@ -837,15 +845,27 @@ function makeTransfer(){
   if(navigator.clipboard){ navigator.clipboard.writeText(box.textContent).then(()=>{ box.textContent+='\n（已复制到剪贴板）'; }); }
 }
 
-function exportCSV(){
-  const head='提交时间,姓名,一级部门,二级部门,用餐日期,核验状态,员工下单,员工打卡,识别下单,识别打卡,判定结果,可报金额,原因说明,支付宝账号,支付宝实名\n';
-  const body=records.map(r=>[r.createdAt.replace('T',' ').slice(0,16),r.name,r.dept1,r.dept2||'',r.date,
-    (RV[r.reviewStatus]||[''])[0],
-    (r.fields&&(r.fields.orderTime||''))+'/'+(r.fields&&r.fields.punchTime||''),
-    (r.ai&&(r.ai.orderTime||''))+'/'+(r.ai&&r.ai.punchTime||''),
-    (ST[r.status]||['—'])[0],r.amount,(r.reason||'').replace(/[,，]/g,'；'),r.ali,r.aliname].join(',')).join('\n');
-  const blob=new Blob(['\ufeff'+head+body],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='晚餐报销审核台账.csv'; a.click();
+// 导出 Excel：后端生成 .xlsx（三个 sheet：台账明细/周汇总/待打款清单，不含 base64 图片）
+// 每周归档一次，防止数据越来越多把浏览器/数据库撑爆
+function exportExcel(){
+  const btn=window.event && window.event.target;
+  const orig=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='导出中…'; }
+  const token=localStorage.getItem(TOKEN_KEY);
+  fetch('/api/dinner/export',{headers:{'Authorization':'Bearer '+token}})
+    .then(r=>{
+      if(!r.ok) throw new Error('导出失败（'+r.status+'）');
+      return r.blob();
+    })
+    .then(blob=>{
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download='晚餐报销台账_'+new Date().toISOString().slice(0,10)+'.xlsx';
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    })
+    .catch(e=>alert(e.message||'导出失败'))
+    .finally(()=>{ if(btn){ btn.disabled=false; btn.textContent=orig||'⬇ 导出 Excel'; } });
 }
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
