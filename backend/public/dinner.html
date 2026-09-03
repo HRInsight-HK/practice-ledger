@@ -179,8 +179,8 @@ function renderMembers(){
        + '<input type="file" id="punch-file-'+i+'" accept="image/*" hidden onchange="onPunch('+i+',this)">'
        + '</div>'
        + '<div class="grid2" style="margin-top:8px;">'
-       + '<div><label>打卡日期</label><input class="m-pdate" data-idx="'+i+'" type="date"></div>'
-       + '<div><label>打卡时间</label><input class="m-ptime" data-idx="'+i+'" placeholder="如 21:10"></div>'
+       + '<div><label>打卡日期 *</label><input class="m-pdate" data-idx="'+i+'" type="date"></div>'
+       + '<div><label>下班打卡时间 *</label><input class="m-ptime" data-idx="'+i+'" placeholder="截图里小字括号内，如 21:10"></div>'
        + '</div>'
        + '<div class="up" id="punch-zone-'+i+'" style="margin-top:8px;" onclick="pickPunch('+i+')">📷 上传打卡证明图<img id="punch-prev-'+i+'" style="display:none"></div>'
        + '</div>';
@@ -296,6 +296,8 @@ function submitGroup(){
   for(let i=0;i<members.length;i++){
     const m=members[i];
     if(!m.name){ err.textContent='请填写第 '+(i+1)+' 位同事的姓名'; err.className='err show'; return; }
+    if(!m.punchDate){ err.textContent='请填写 '+m.name+' 的打卡日期（看打卡截图）'; err.className='err show'; return; }
+    if(!m.punchTime){ err.textContent='请填写 '+m.name+' 截图里的下班打卡时间（如 21:10）'; err.className='err show'; return; }
     if(!m.punchFile){ err.textContent='请为 '+m.name+' 上传 1 张打卡证明截图'; err.className='err show'; return; }
   }
   // 支付宝只验证下单人

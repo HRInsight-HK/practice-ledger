@@ -333,7 +333,26 @@ async function recognizeOne(data, r) {
     throw err;
   }
   const orderAI = orderBuf ? await vision.recognize(orderBuf, 'order') : null;
-  const punchAI = punchBuf ? await vision.recognize(punchBuf, 'punch') : null;
+  let punchAI = punchBuf ? await vision.recognize(punchBuf, 'punch') : null;
+  // 双次识别自检：同一张图再识别一次，两次结果不一致说明识别不稳定 → 转人工
+  const doubleCheck = process.env.VISION_DOUBLE_CHECK !== '0';
+  const unstable = [];
+  const noSpc0 = s => String(s == null ? '' : s).replace(/\s+/g, '');
+  if (doubleCheck) {
+    if (orderAI && orderBuf) {
+      const o2 = await vision.recognize(orderBuf, 'order');
+      if (o2.orderTime !== orderAI.orderTime || noSpc0(o2.orderNo) !== noSpc0(orderAI.orderNo)
+        || Math.abs((o2.amount || 0) - (orderAI.amount || 0)) > 0.5) {
+        unstable.push('订单截图两次识别不一致（下单时间 ' + orderAI.orderTime + ' / ' + o2.orderTime + '），识别不稳定，转人工核验');
+      }
+    }
+    if (punchAI && punchBuf) {
+      const p2 = await vision.recognize(punchBuf, 'punch');
+      if (p2.punchTime !== punchAI.punchTime || p2.punchDate !== punchAI.punchDate) {
+        unstable.push('打卡截图两次识别不一致（' + punchAI.punchTime + ' / ' + p2.punchTime + '），识别不稳定，转人工核验');
+      }
+    }
+  }
   const ai = {
     orderTime: orderAI ? orderAI.orderTime : null,
     doneTime: orderAI ? (orderAI.doneTime || orderAI.orderTime) : null,
@@ -374,6 +393,16 @@ async function recognizeOne(data, r) {
     if (noSpc(f.orderNo) && noSpc(ai.orderNo) && noSpc(f.orderNo) !== noSpc(ai.orderNo)) { mismatch.push('订单号：员工 ' + f.orderNo + ' / 识别 ' + ai.orderNo); matched = false; }
     if (f.amount && ai.amount && Math.abs(Number(f.amount) - Number(ai.amount)) > 0.5) { mismatch.push('金额：员工 ' + f.amount + ' / 识别 ' + ai.amount); matched = false; }
   }
+  // 业务常识校验：识别结果出现以下任一可疑情形时，一律转人工核验，绝不自动判定（防止 AI 读错排班时间等误判直接生效）
+  if (ai.orderConfidence != null && ai.orderConfidence < 80) { mismatch.push('订单识别置信度仅 ' + ai.orderConfidence + '%，转人工核验'); matched = false; }
+  if (ai.punchConfidence != null && ai.punchConfidence < 80) { mismatch.push('打卡识别置信度仅 ' + ai.punchConfidence + '%，转人工核验'); matched = false; }
+  if (ai.punchDate && r.date && ai.punchDate !== r.date) { mismatch.push('识别的打卡日期 ' + ai.punchDate + ' 与用餐日期 ' + r.date + ' 不一致，转人工核验'); matched = false; }
+  if (ai.punchTime) {
+    const pmin = toMin(ai.punchTime);
+    if (pmin != null && pmin < 19 * 60) { mismatch.push('识别的打卡时间 ' + ai.punchTime + ' 早于 19:00，疑似读到了排班时间而非实际打卡，转人工核验'); matched = false; }
+    if (ai.orderTime && pmin != null && pmin < toMin(ai.orderTime)) { mismatch.push('打卡时间 ' + ai.punchTime + ' 早于外卖下单时间 ' + ai.orderTime + '，时间逻辑可疑，转人工核验'); matched = false; }
+  }
+  if (unstable.length) { mismatch.push(...unstable); matched = false; }
   if (!matched) {
     r.reviewStatus = 'pendingManual';
     r.verifyInfo = { matched: false, differences: mismatch, decidedAt: new Date().toISOString() };

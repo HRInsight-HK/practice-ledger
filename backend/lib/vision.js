@@ -105,7 +105,24 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function recognize(imageBuffer, kind) {
   // 测试模式：MOCK_VISION=1 返回正常；MOCK_VISION=2 第一次返回坏 JSON（模拟限速），走自纠错重试
+  // MOCK_VISION=1 + MOCK_FILE=/path/mock.json 时，按调用顺序返回 JSON 数组里的结果（用尽后重复最后一个），
+  // 每次 recognize 重新读文件，测试脚本可随时改写 mock 序列而无需重启服务。
   if (process.env.MOCK_VISION === '1') {
+    if (process.env.MOCK_FILE) {
+      try {
+        const fs = require('fs');
+        const raw = fs.readFileSync(process.env.MOCK_FILE, 'utf-8');
+        // mock 文件内容变化时重置调用序号（测试脚本每个场景改写一次文件）
+        if (global.__mockLast !== raw) { global.__mockLast = raw; global.__mockIdx_punch = 0; global.__mockIdx_order = 0; }
+        const mock = JSON.parse(raw);
+        if (mock && Array.isArray(mock[kind]) && mock[kind].length) {
+          const key = '__mockIdx_' + kind;
+          const i = global[key] || 0; global[key] = i + 1;
+          const item = mock[kind][Math.min(i, mock[kind].length - 1)];
+          return Object.assign({ model: 'mock', confidence: 95, raw: item }, item);
+        }
+      } catch (e) { /* mock 文件无效则回落到默认 mock */ }
+    }
     return kind === 'punch'
       ? { model: 'mock', confidence: 95, punchDate: '2026-08-28', punchTime: '21:10', raw: { punchDate: '2026-08-28', punchTime: '21:10' } }
       : { model: 'mock', confidence: 95, orderTime: '19:42', doneTime: '20:05', orderNo: 'MT20260828A102', amount: 46.5, raw: { orderTime: '19:42', orderNo: 'MT20260828A102', amount: 46.5 } };
