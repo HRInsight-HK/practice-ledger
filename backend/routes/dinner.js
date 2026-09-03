@@ -362,10 +362,16 @@ async function recognizeOne(data, r) {
     return true;
   };
   let matched = true;
-  if (r.punchImg) { if (!cmpTime(f.punchTime, ai.punchTime, '打卡时间')) matched = false; if (!cmpTime(f.punchDate, ai.punchDate, '打卡日期')) matched = false; }
-  if (r.orderImg) {
+  // 图片存在性判断要兼容新旧字段（orderImgData/punchImgData = base64 入库；orderImg/punchImg = 旧文件路径）
+  // 此前只判旧字段导致比对被整个跳过，AI 提取错时间也会"自动判定一致"
+  const hasOrderImg = !!(r.orderImgData || r.orderImg);
+  const hasPunchImg = !!(r.punchImgData || r.punchImg);
+  if (hasPunchImg) { if (!cmpTime(f.punchTime, ai.punchTime, '打卡时间')) matched = false; if (!cmpTime(f.punchDate, ai.punchDate, '打卡日期')) matched = false; }
+  if (hasOrderImg) {
     if (!cmpTime(f.orderTime, ai.orderTime, '下单时间')) matched = false;
-    if (f.orderNo && ai.orderNo && String(f.orderNo).trim() !== String(ai.orderNo).trim()) { mismatch.push('订单号：员工 ' + f.orderNo + ' / 识别 ' + ai.orderNo); matched = false; }
+    // 订单号识别常带空格分组（如 "3302 2749 ..."），比对前统一去空格
+    const noSpc = s => String(s == null ? '' : s).replace(/\s+/g, '');
+    if (noSpc(f.orderNo) && noSpc(ai.orderNo) && noSpc(f.orderNo) !== noSpc(ai.orderNo)) { mismatch.push('订单号：员工 ' + f.orderNo + ' / 识别 ' + ai.orderNo); matched = false; }
     if (f.amount && ai.amount && Math.abs(Number(f.amount) - Number(ai.amount)) > 0.5) { mismatch.push('金额：员工 ' + f.amount + ' / 识别 ' + ai.amount); matched = false; }
   }
   if (!matched) {
