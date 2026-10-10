@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>人员配置管理 - 实操台账系统</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --primary:#2563eb; --primary-dark:#1d4ed8;
+    --bg:#f5f6fa; --card:#fff; --border:#e5e7eb;
+    --text:#1f2937; --text2:#6b7280; --text3:#9ca3af;
+    --green:#059669; --red:#dc2626; --radius:12px;
+  }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:860px; margin:0 auto; padding:32px 20px 60px; }
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  .header h1 { font-size:20px; font-weight:600; }
+  .header .sub { font-size:13px; color:var(--text2); margin-top:4px; }
+  .btn { padding:10px 18px; border:none; border-radius:8px; font-size:14px; font-weight:500; cursor:pointer; }
+  .btn-primary { background:var(--primary); color:#fff; }
+  .btn-primary:hover { background:var(--primary-dark); }
+  .btn-default { background:#f0f0f0; color:var(--text); }
+  .btn-test { background:#eef2ff; color:var(--primary); font-size:13px; padding:6px 14px; }
+  .card { background:var(--card); border-radius:var(--radius); border:1px solid var(--border); padding:24px; margin-bottom:20px; }
+  .card-title { font-size:15px; font-weight:600; margin-bottom:4px; }
+  .card-desc { font-size:12px; color:var(--text3); margin-bottom:16px; line-height:1.6; }
+  .role-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .role-box { border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .role-box:hover { border-color:var(--primary); }
+  .role-tag { display:inline-block; font-size:11px; padding:2px 8px; border-radius:4px; margin-bottom:10px; font-weight:500; }
+  .role-hr .role-tag { background:#e0f2fe; color:#0369a1; }
+  .role-manager .role-tag { background:#fef3c7; color:#92400e; }
+  .role-admin .role-tag { background:#ede9fe; color:#5b21b6; }
+  .form-group { margin-bottom:10px; }
+  .form-label { display:block; font-size:12px; color:var(--text2); margin-bottom:4px; }
+  .form-input { width:100%; border:1px solid var(--border); border-radius:8px; padding:9px 11px; font-size:14px; font-family:inherit; }
+  .form-input:focus { outline:none; border-color:var(--primary); }
+  .save-bar { display:flex; justify-content:space-between; align-items:center; margin-top:8px; }
+  .meta { font-size:11px; color:var(--text3); }
+  .notice { background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; border-radius:10px; padding:12px 16px; font-size:13px; line-height:1.7; margin-bottom:20px; }
+  .toast { position:fixed; top:20px; right:20px; padding:12px 20px; border-radius:8px; font-size:14px; z-index:2000; color:#fff; }
+  .toast.success { background:var(--green); }
+  .toast.error { background:var(--red); }
+  .login-mask { position:fixed; inset:0; background:rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; z-index:1000; }
+  .login-box { background:#fff; border-radius:16px; padding:32px; width:340px; }
+  .login-box h2 { font-size:17px; margin-bottom:16px; text-align:center; }
+  .back-link { color:var(--primary); text-decoration:none; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div>
+      <h1>⚙️ 人员配置管理</h1>
+      <div class="sub">职位 → 企微UserID 映射，换人时在网页直接修改，无需改代码重新部署</div>
+    </div>
+    <a class="back-link" href="/">← 返回台账</a>
+  </div>
+
+  <div class="notice">
+    ✅ 此配置保存在数据库中，企微通知的 @ 对象实时读取这里。<br>
+    💡 改完后用每个职位卡片里的「发测试通知」验证新 UserID 是否正确（发到群机器人）。
+  </div>
+
+  <div class="card">
+    <div class="card-title">职位与企微账号</div>
+    <div class="card-desc">UserID 需与企业微信通讯录中的账号一致（区分大小写）。留空则回退到系统环境变量配置。</div>
+    <div class="role-grid">
+      <div class="role-box role-hr">
+        <span class="role-tag">SSC · 跟进实操/薪资</span>
+        <div class="form-group"><label class="form-label">姓名（用于显示）</label>
+          <input class="form-input" id="hrName" placeholder="如：Zoe"></div>
+        <div class="form-group"><label class="form-label">企微 UserID</label>
+          <input class="form-input" id="hrUserId" placeholder="如：ZhongYi"></div>
+        <button class="btn btn-test" onclick="sendTest('hr')">发送测试通知</button>
+      </div>
+      <div class="role-box role-manager">
+        <span class="role-tag">HRD · 审批/风险</span>
+        <div class="form-group"><label class="form-label">姓名（用于显示）</label>
+          <input class="form-input" id="managerName" placeholder="如：massie"></div>
+        <div class="form-group"><label class="form-label">企微 UserID</label>
+          <input class="form-input" id="managerUserId" placeholder="如：JiangHanLing"></div>
+        <button class="btn btn-test" onclick="sendTest('manager')">发送测试通知</button>
+      </div>
+      <div class="role-box role-admin">
+        <span class="role-tag">行政 · 登记</span>
+        <div class="form-group"><label class="form-label">姓名（用于显示）</label>
+          <input class="form-input" id="adminName" placeholder="如：莫青霖"></div>
+        <div class="form-group"><label class="form-label">企微 UserID</label>
+          <input class="form-input" id="adminUserId" placeholder="如：MoQingLing"></div>
+        <button class="btn btn-test" onclick="sendTest('admin')">发送测试通知</button>
+      </div>
+    </div>
+    <div class="save-bar">
+      <span class="meta" id="metaInfo"></span>
+      <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+    </div>
+  </div>
+</div>
+
+<!-- 未登录提示 -->
+<div class="login-mask hidden" id="loginMask" style="display:none;">
+  <div class="login-box">
+    <h2>请先登录台账系统</h2>
+    <p style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:16px;">人员配置需 SSC 或 HRD 权限</p>
+    <a href="/" style="display:block;text-align:center;color:var(--primary);font-size:14px;text-decoration:none;">← 去登录</a>
+  </div>
+</div>
+
+<script>
+const FIELDS = ['hrName','hrUserId','managerName','managerUserId','adminName','adminUserId'];
+const token = localStorage.getItem('pl_token') || '';
+
+function showToast(msg, type) {
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type || 'success');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+async function api(path, method, body) {
+  const opts = { method, headers: { 'Authorization': 'Bearer ' + token } };
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const res = await fetch('/api' + path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || '请求失败');
+  return data;
+}
+
+async function loadConfig() {
+  if (!token) { document.getElementById('loginMask').style.display = 'flex'; return; }
+  try {
+    const data = await api('/config');
+    const p = data.personnelConfig || {};
+    FIELDS.forEach(f => { document.getElementById(f).value = p[f] || ''; });
+    const meta = document.getElementById('metaInfo');
+    meta.textContent = p.updatedAt ? ('上次更新：' + p.updatedAt.slice(0, 19).replace('T', ' ')) : '尚未在网页修改过（当前使用初始/环境变量配置）';
+    // 只读模式处理
+    try {
+      const me = await api('/auth/me');
+      if (me.user && me.user.role !== 'hr' && me.user.role !== 'manager') {
+        FIELDS.forEach(f => document.getElementById(f).disabled = true);
+        document.querySelectorAll('.btn-test').forEach(b => b.disabled = true);
+        document.querySelector('.btn-primary').style.display = 'none';
+        meta.textContent += ' · 当前角色只读';
+      }
+    } catch(e) {}
+  } catch (e) {
+    if (String(e.message).includes('token') || String(e.message).includes('auth') || String(e.message).includes('过期')) {
+      document.getElementById('loginMask').style.display = 'flex';
+    } else {
+      showToast(e.message, 'error');
+    }
+  }
+}
+
+async function saveConfig() {
+  const body = {};
+  FIELDS.forEach(f => body[f] = document.getElementById(f).value.trim());
+  try {
+    await api('/config', 'PUT', body);
+    showToast('配置已保存，通知 @ 对象即时生效', 'success');
+    loadConfig();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+async function sendTest(target) {
+  try {
+    const r = await api('/config/test', 'POST', { target });
+    showToast('测试通知已发送 → ' + r.target, 'success');
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
+}
+
+loadConfig();
+</script>
+</body>
+</html>
