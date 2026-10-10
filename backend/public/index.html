@@ -319,6 +319,7 @@ tr:hover { background: var(--gray-bg); }
     <div class="app-header-right">
       <span class="user-info" id="userInfo"></span>
       <button class="btn btn-default btn-sm" id="btnAccounts" style="display:none;" onclick="openAccountsModal()">👥 账号管理</button>
+      <button class="btn btn-default btn-sm" id="btnPersonnel" style="display:none;" onclick="location.href='/personnel-config'">⚙️ 人员配置</button>
       <button class="btn btn-default btn-sm" id="btnLogs" style="display:none;" onclick="openLogsModal()">📋 登录日志</button>
       <button class="btn-logout" onclick="logout()">退出</button>
     </div>
@@ -818,6 +819,7 @@ async function showApp() {
   const isHR = currentUser.role === 'hr';
   const isManager = currentUser.role === 'manager';
   document.getElementById('btnAccounts').style.display = (isHR || isManager) ? '' : 'none';
+  document.getElementById('btnPersonnel').style.display = (isHR || isManager) ? '' : 'none';
   document.getElementById('btnLogs').style.display = (isHR || isManager) ? '' : 'none';
   document.getElementById('btnRegister').style.display = (currentUser.role === 'admin' || isHR) ? '' : 'none';
   document.getElementById('btnQuestionnaire').style.display = (currentUser.role === 'admin' || isHR || isManager) ? '' : 'none';
