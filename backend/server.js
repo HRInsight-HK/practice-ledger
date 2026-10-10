@@ -65,6 +65,12 @@ app.use('/api/records', require('./routes/records'));
 app.use('/api/questionnaire', require('./routes/questionnaire'));
 app.use('/api/invite', require('./routes/invite'));
 app.use('/api/dinner', require('./routes/dinner'));
+app.use('/api/config', require('./routes/config'));
+
+// 人员配置管理页（职位→企微UserID映射）
+app.get('/personnel-config', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'personnel-config.html'), { cacheControl: false });
+});
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
