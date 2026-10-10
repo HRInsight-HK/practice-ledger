@@ -3,9 +3,22 @@ const http = require('http');
 
 const WEBHOOK_URL = process.env.WECOM_BOT_WEBHOOK || '';
 const CLOUD_BASE_URL = process.env.CLOUD_BASE_URL || '';
-const HR_USERID = process.env.HR_WECOM_USERID || '';
-const MANAGER_USERID = process.env.MANAGER_WECOM_USERID || '';
-const ADMIN_USERID = process.env.ADMIN_WECOM_USERID || '';
+const ENV_HR_USERID = process.env.HR_WECOM_USERID || '';
+const ENV_MANAGER_USERID = process.env.MANAGER_WECOM_USERID || '';
+const ENV_ADMIN_USERID = process.env.ADMIN_WECOM_USERID || '';
+
+// 动态读取人员配置：数据库 personnelConfig 优先（网页可改），环境变量兜底
+function getPersonnel() {
+  try {
+    const { getData } = require('./db');
+    const d = getData();
+    if (d && d.personnelConfig) return d.personnelConfig;
+  } catch (e) {}
+  return {};
+}
+function HR_USERID() { return getPersonnel().hrUserId || ENV_HR_USERID; }
+function MANAGER_USERID() { return getPersonnel().managerUserId || ENV_MANAGER_USERID; }
+function ADMIN_USERID() { return getPersonnel().adminUserId || ENV_ADMIN_USERID; }
 
 // Maximum practice days before labor risk warning
 const MAX_PRACTICE_DAYS = 7;
@@ -91,7 +104,7 @@ function notifyRecordCreated(r) {
   ].join('\n');
 
   // 行政登记后专门@行政人员
-  const mentioned = ADMIN_USERID ? [ADMIN_USERID] : ['@all'];
+  const mentioned = ADMIN_USERID() ? [ADMIN_USERID()] : ['@all'];
   sendText(content, mentioned);
 
   // 实操天数超过7天，单独发送风险预警 @HRD + @全员
@@ -115,7 +128,7 @@ function notifyDeadline3Day(r) {
     content += '\n反馈表单：' + feedbackLink;
   }
 
-  const mentioned = HR_USERID ? [HR_USERID] : [];
+  const mentioned = HR_USERID() ? [HR_USERID()] : [];
   sendText(content, mentioned);
 }
 
@@ -132,7 +145,7 @@ function notifyDeadline1Day(r) {
     content += '\n反馈表单：' + feedbackLink;
   }
 
-  const mentioned = HR_USERID ? [HR_USERID] : [];
+  const mentioned = HR_USERID() ? [HR_USERID()] : [];
   sendText(content, mentioned);
 }
 
@@ -153,7 +166,7 @@ function notifyFeedbackSubmitted(r) {
   ].join('\n');
 
   if (r.feedback.result === 'pass') {
-    content += '\n请@' + (MANAGER_USERID || 'HRD') + '和SSC办理正式入职手续';
+    content += '\n请@' + (MANAGER_USERID() || 'HRD') + '和SSC办理正式入职手续';
   } else {
     content += '\n请SSC尽快办理薪资结算';
   }
@@ -167,10 +180,10 @@ function notifyFeedbackSubmitted(r) {
 
 // 办理入职后 @HRD 和 @SSC
 function notifyOnboarding(r) {
-  const mentioned = [MANAGER_USERID, HR_USERID].filter(Boolean);
+  const mentioned = [MANAGER_USERID(), HR_USERID()].filter(Boolean);
   const names = [];
-  if (MANAGER_USERID) names.push('@' + MANAGER_USERID);
-  if (HR_USERID) names.push('@' + HR_USERID);
+  if (MANAGER_USERID()) names.push('@' + MANAGER_USERID());
+  if (HR_USERID()) names.push('@' + HR_USERID());
   const nameStr = names.length ? names.join(' ') : 'HRD和SSC';
 
   const content = [
@@ -195,7 +208,7 @@ function notifyDeadlineToday(r) {
     '实操周期：' + r.startDate + ' ~ ' + r.endDate
   ].join('\n') + (feedbackLink ? '\n反馈表单：' + feedbackLink : '');
   // 同时@SSC跟进
-  const mentioned = HR_USERID ? [HR_USERID] : [];
+  const mentioned = HR_USERID() ? [HR_USERID()] : [];
   sendText(content, mentioned);
 }
 
@@ -222,7 +235,7 @@ function notifyOver7Days(r) {
     'SSC请跟进薪资核算及反馈结果收集事宜。'
   ].join('\n');
   // >7天预警 @HRD + @全员
-  const mentioned = MANAGER_USERID ? [MANAGER_USERID, '@all'] : ['@all'];
+  const mentioned = MANAGER_USERID() ? [MANAGER_USERID(), '@all'] : ['@all'];
   sendText(content, mentioned);
 }
 
@@ -292,9 +305,9 @@ function getDiagnosticInfo() {
   return {
     webhookConfigured: !!WEBHOOK_URL,
     cloudBaseUrl: CLOUD_BASE_URL || '(empty)',
-    hrUserId: HR_USERID || '(empty)',
-    managerUserId: MANAGER_USERID || '(empty)',
-    adminUserId: ADMIN_USERID || '(empty)',
+    hrUserId: HR_USERID() || '(empty)',
+    managerUserId: MANAGER_USERID() || '(empty)',
+    adminUserId: ADMIN_USERID() || '(empty)',
     maxPracticeDays: MAX_PRACTICE_DAYS
   };
 }
@@ -314,7 +327,7 @@ function saveDataQuiet() {
 }
 
 function startScheduler() {
-  console.log('[Scheduler] Deadline reminder scheduler started (SSC:' + (HR_USERID || 'N/A') + ', HRD:' + (MANAGER_USERID || 'N/A') + ', ADMIN:' + (ADMIN_USERID || 'N/A') + ')');
+  console.log('[Scheduler] Deadline reminder scheduler started (SSC:' + (HR_USERID() || 'N/A') + ', HRD:' + (MANAGER_USERID() || 'N/A') + ', ADMIN:' + (ADMIN_USERID() || 'N/A') + ')');
   const runCheck = () => {
     try {
       checkAndNotifyDeadlines();
