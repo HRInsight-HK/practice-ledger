@@ -91,6 +91,26 @@ function sanitizeDevices(list) {
   })).filter(d => d.alias || d.deviceModel || d.brand || d.serialNumber || d.wecomAccount || d.personalWechat || d.otherAccounts);
 }
 
+// ==================== 岗位/门禁/薪资构成（offer标准） ====================
+function sanitizeSalaryStage(s) {
+  if (!s || typeof s !== 'object') return null;
+  const stage = {
+    base: String(s.base || '').trim(),
+    perf: String(s.perf || '').trim(),
+    commission: String(s.commission || '').trim(),
+    allowance: String(s.allowance || '').trim()
+  };
+  return (stage.base || stage.perf || stage.commission || stage.allowance) ? stage : null;
+}
+
+function sanitizeSalary(s) {
+  if (!s || typeof s !== 'object') return null;
+  const probation = sanitizeSalaryStage(s.probation);
+  const regular = sanitizeSalaryStage(s.regular);
+  const note = String(s.note || '').trim();
+  return (probation || regular || note) ? { probation: probation, regular: regular, note: note } : null;
+}
+
 function filterRecord(r, role) {
   const base = {
     id: r.id,
@@ -106,6 +126,9 @@ function filterRecord(r, role) {
     serialNumber: r.serialNumber || '',
     contact: r.contact || null,
     devices: r.devices || [],
+    position: r.position || '',
+    accessCard: r.accessCard || '',
+    hasSalary: !!r.salary,
     hasResume: !!(r.resume && r.resume.fileData),
     resumeOriginalName: r.resume ? (r.resume.originalName || '') : '',
     remark: r.remark || '',
@@ -124,6 +147,7 @@ function filterRecord(r, role) {
 
   const full = {
     ...base,
+    salary: r.salary || null,
     feedback: r.feedback || null,
     settlement: r.settlement || null,
     onboarding: r.onboarding || null,
@@ -145,7 +169,7 @@ router.get('/', authMiddleware, (req, res) => {
 });
 
 router.post('/', authMiddleware, requireRole('admin', 'hr'), async (req, res) => {
-  const { name, mentor, dept1, dept2, startDate, practiceDays, deviceModel, accessories, serialNumber, remark, contact, devices } = req.body;
+  const { name, mentor, dept1, dept2, startDate, practiceDays, deviceModel, accessories, serialNumber, remark, contact, devices, position, accessCard, salary } = req.body;
   if (!name) return res.status(400).json({ error: '请填写实操人员姓名' });
   if (!mentor) return res.status(400).json({ error: '请填写带教人' });
   if (!dept1) return res.status(400).json({ error: '请填写一级部门' });
@@ -172,6 +196,9 @@ router.post('/', authMiddleware, requireRole('admin', 'hr'), async (req, res) =>
     serialNumber: serialNumber || '',
     contact: sanitizeContact(contact),
     devices: sanitizeDevices(devices),
+    position: String(position || '').trim(),
+    accessCard: String(accessCard || '').trim(),
+    salary: (req.user.role === 'hr' && salary !== undefined) ? sanitizeSalary(salary) : null,
     remark: remark || '',
     status,
     feedback: null,
@@ -199,7 +226,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'hr'), async (req, res) 
   const r = data.records.find(x => x.id === req.params.id);
   if (!r) return res.status(404).json({ error: '记录不存在' });
 
-  const { name, mentor, dept1, dept2, startDate, practiceDays, deviceModel, accessories, serialNumber, remark, contact, devices } = req.body;
+  const { name, mentor, dept1, dept2, startDate, practiceDays, deviceModel, accessories, serialNumber, remark, contact, devices, position, accessCard, salary } = req.body;
   if (name !== undefined) r.name = name;
   if (mentor !== undefined) r.mentor = mentor;
   if (dept1 !== undefined) r.dept1 = dept1;
@@ -221,6 +248,12 @@ router.put('/:id', authMiddleware, requireRole('admin', 'hr'), async (req, res) 
   if (serialNumber !== undefined) r.serialNumber = serialNumber;
   if (contact !== undefined) r.contact = sanitizeContact(contact);
   if (devices !== undefined) r.devices = sanitizeDevices(devices);
+  if (position !== undefined) r.position = String(position).trim();
+  if (accessCard !== undefined) r.accessCard = String(accessCard).trim();
+  if (salary !== undefined) {
+    if (req.user.role !== 'hr') return res.status(403).json({ error: '薪资构成仅SSC可登记' });
+    r.salary = sanitizeSalary(salary);
+  }
   if (remark !== undefined) r.remark = remark;
   r.updatedAt = new Date().toISOString();
   await saveData();

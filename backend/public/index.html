@@ -392,6 +392,14 @@ tr:hover { background: var(--gray-bg); }
           <label class="form-label">私人微信</label>
           <input type="text" class="form-input" id="f_wechat" placeholder="实操人员个人微信号">
         </div>
+        <div class="form-group">
+          <label class="form-label">岗位 <span class="hint">（offer岗位）</span></label>
+          <input type="text" class="form-input" id="f_position" placeholder="如：运营专员">
+        </div>
+        <div class="form-group">
+          <label class="form-label">门禁卡</label>
+          <input type="text" class="form-input" id="f_accessCard" placeholder="数量/编号，如：1张">
+        </div>
         <div class="form-group full">
           <label class="form-label">备注</label>
           <input type="text" class="form-input" id="f_remark" placeholder="可选">
@@ -448,35 +456,35 @@ tr:hover { background: var(--gray-bg); }
 
 <!-- ==================== Salary Modal ==================== -->
 <div class="modal-overlay" id="salaryModal">
-  <div class="modal" style="max-width:520px;">
+  <div class="modal" style="max-width:640px;">
     <div class="modal-header">
-      <div class="modal-title">登记薪资结构</div>
+      <div class="modal-title">登记薪资构成（按offer标准）</div>
       <button class="modal-close" onclick="closeModal('salaryModal')">&#x2715;</button>
     </div>
     <div class="modal-body">
       <div id="salaryPersonInfo" style="background:var(--gray-bg); padding:12px 16px; border-radius:var(--radius-sm); margin-bottom:20px; font-size:13px; color:var(--text-secondary);"></div>
-      <div class="form-grid">
-        <div class="form-group full">
-          <label class="form-label">薪资结构描述 <span class="hint">（入职前谈定）</span></label>
-          <input type="text" class="form-input" id="f_salaryStructure" placeholder="如：基本工资+绩效+补贴">
-        </div>
-        <div class="form-group">
-          <label class="form-label">基本工资 <span class="hint">（元/月）</span></label>
-          <input type="number" class="form-input" id="f_salaryBase" placeholder="元/月" min="0">
-        </div>
-        <div class="form-group">
-          <label class="form-label">补贴/其他 <span class="hint">（元/月）</span></label>
-          <input type="number" class="form-input" id="f_salaryAllowance" placeholder="元/月" min="0">
-        </div>
-        <div class="form-group full">
-          <label class="form-label">薪资备注</label>
-          <textarea class="form-textarea" id="f_salaryNote" placeholder="薪资说明、发放方式等"></textarea>
-        </div>
+      <div style="font-size:13px; font-weight:600; margin-bottom:8px;">试用期</div>
+      <div class="form-grid" style="grid-template-columns:repeat(4,1fr);">
+        <div class="form-group"><label class="form-label">基本薪资</label><input type="text" class="form-input" id="f_p_base" placeholder="元/月"></div>
+        <div class="form-group"><label class="form-label">绩效</label><input type="text" class="form-input" id="f_p_perf" placeholder="元/月或比例"></div>
+        <div class="form-group"><label class="form-label">提成</label><input type="text" class="form-input" id="f_p_comm" placeholder="元/比例"></div>
+        <div class="form-group"><label class="form-label">补贴</label><input type="text" class="form-input" id="f_p_allow" placeholder="元/月"></div>
+      </div>
+      <div style="font-size:13px; font-weight:600; margin:12px 0 8px;">转正后</div>
+      <div class="form-grid" style="grid-template-columns:repeat(4,1fr);">
+        <div class="form-group"><label class="form-label">基本薪资</label><input type="text" class="form-input" id="f_r_base" placeholder="元/月"></div>
+        <div class="form-group"><label class="form-label">绩效</label><input type="text" class="form-input" id="f_r_perf" placeholder="元/月或比例"></div>
+        <div class="form-group"><label class="form-label">提成</label><input type="text" class="form-input" id="f_r_comm" placeholder="元/比例"></div>
+        <div class="form-group"><label class="form-label">补贴</label><input type="text" class="form-input" id="f_r_allow" placeholder="元/月"></div>
+      </div>
+      <div class="form-group" style="margin-top:12px;">
+        <label class="form-label">浮动/不固定说明 <span class="hint">（浮动绩效、按业绩提成等需在此注明）</span></label>
+        <textarea class="form-textarea" id="f_salaryNote" placeholder="如：绩效为浮动值，范围X~X元，按月考核发放；提成按实际业绩计算"></textarea>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-default" onclick="closeModal('salaryModal')">取消</button>
-      <button class="btn btn-primary" onclick="saveSalary()">保存薪资</button>
+      <button class="btn btn-primary" onclick="saveSalary()">保存薪资构成</button>
     </div>
   </div>
 </div>
@@ -726,7 +734,6 @@ let records = [];
 let accounts = [];
 let currentFilter = 'all';
 let editingId = null;
-let salaryRecordId = null;
 let feedbackRecordId = null;
 let settleRecordId = null;
 let settleType = 'settle';
@@ -1002,7 +1009,9 @@ function renderTable() {
 
     let salaryCell = '';
     if (showSalary) {
-      salaryCell = '<span style="font-size:11px;color:var(--text-tertiary);">请用本地工具</span>';
+      salaryCell = r.hasSalary
+        ? '<span style="font-size:12px;color:var(--green);">已登记</span>'
+        : '<span style="font-size:11px;color:var(--text-tertiary);">待登记</span>';
     }
 
     let deviceCell = '—';
@@ -1029,6 +1038,7 @@ function renderTable() {
         }
       }
       actions += `<button class="btn-text btn-sm" onclick="openResumeModal('${r.id}')">📎${r.hasResume ? '简历' : '传简历'}</button>`;
+      actions += `<button class="btn-text btn-sm" onclick="openSalaryModal('${r.id}')">💰${r.hasSalary ? '薪资已录' : '录薪资'}</button>`;
     }
     // 反馈链接：所有角色可复制，发给带教人填写
     if ((r.status === 'practicing' || r.status === 'feedback_pending') && r.feedbackToken) {
@@ -1103,6 +1113,8 @@ function openRegisterModal(id) {
     document.getElementById('f_phone').value = (r.contact && r.contact.phone) || '';
     document.getElementById('f_wecom').value = (r.contact && r.contact.wecom) || '';
     document.getElementById('f_wechat').value = (r.contact && r.contact.wechat) || '';
+    document.getElementById('f_position').value = r.position || '';
+    document.getElementById('f_accessCard').value = r.accessCard || '';
     document.getElementById('f_remark').value = r.remark || '';
     // 兼容旧数据：无devices但有旧设备字段时，转为第一行
     let devices = r.devices || [];
@@ -1112,7 +1124,7 @@ function openRegisterModal(id) {
     renderDeviceRows(devices);
   } else {
     title.textContent = '登记实操人员';
-    ['f_name','f_mentor','f_dept1','f_dept2','f_days','f_phone','f_wecom','f_wechat','f_remark'].forEach(fid => document.getElementById(fid).value = '');
+    ['f_name','f_mentor','f_dept1','f_dept2','f_days','f_phone','f_wecom','f_wechat','f_position','f_accessCard','f_remark'].forEach(fid => document.getElementById(fid).value = '');
     document.getElementById('f_startDate').value = todayStr();
     renderDeviceRows([]);
   }
@@ -1133,6 +1145,8 @@ async function saveRecord() {
       wechat: document.getElementById('f_wechat').value.trim()
     },
     devices: collectDevices(),
+    position: document.getElementById('f_position').value.trim(),
+    accessCard: document.getElementById('f_accessCard').value.trim(),
     remark: document.getElementById('f_remark').value.trim(),
   };
   if (!body.name) return showToast('请填写实操人员姓名', 'error');
@@ -1160,8 +1174,58 @@ async function saveRecord() {
   }
 }
 
+// ==================== Salary（SSC登记，按offer标准） ====================
+let salaryRecordId = null;
+
 function openSalaryModal(id) {
-  showToast('薪资管理已迁移至本地SSC工具，请使用本地工具登记薪资', 'error');
+  if (!isHR()) return showToast('薪资构成仅SSC可登记', 'error');
+  salaryRecordId = id;
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('salaryPersonInfo').textContent = r.name + '（' + r.dept1 + (r.dept2 ? '·' + r.dept2 : '') + ' / 带教：' + r.mentor + '）';
+  const s = r.salary || {};
+  const p = s.probation || {};
+  const g = s.regular || {};
+  document.getElementById('f_p_base').value = p.base || '';
+  document.getElementById('f_p_perf').value = p.perf || '';
+  document.getElementById('f_p_comm').value = p.commission || '';
+  document.getElementById('f_p_allow').value = p.allowance || '';
+  document.getElementById('f_r_base').value = g.base || '';
+  document.getElementById('f_r_perf').value = g.perf || '';
+  document.getElementById('f_r_comm').value = g.commission || '';
+  document.getElementById('f_r_allow').value = g.allowance || '';
+  document.getElementById('f_salaryNote').value = s.note || '';
+  showModal('salaryModal');
+}
+
+async function saveSalary() {
+  const salary = {
+    probation: {
+      base: document.getElementById('f_p_base').value.trim(),
+      perf: document.getElementById('f_p_perf').value.trim(),
+      commission: document.getElementById('f_p_comm').value.trim(),
+      allowance: document.getElementById('f_p_allow').value.trim()
+    },
+    regular: {
+      base: document.getElementById('f_r_base').value.trim(),
+      perf: document.getElementById('f_r_perf').value.trim(),
+      commission: document.getElementById('f_r_comm').value.trim(),
+      allowance: document.getElementById('f_r_allow').value.trim()
+    },
+    note: document.getElementById('f_salaryNote').value.trim()
+  };
+  const p = salary.probation, g = salary.regular;
+  if (!p.base && !p.perf && !p.commission && !p.allowance && !g.base && !g.perf && !g.commission && !g.allowance && !salary.note) {
+    return showToast('请至少填写一项薪资构成', 'error');
+  }
+  try {
+    await api('PUT', '/records/' + salaryRecordId, { salary });
+    showToast('薪资构成已保存', 'success');
+    closeModal('salaryModal');
+    await loadRecords();
+  } catch (e) {
+    showToast(e.message, 'error');
+  }
 }
 
 // ==================== Resume ====================
@@ -1303,14 +1367,17 @@ function openSettlement(id, type) {
   }
 
   let info = '<strong>' + r.name + '</strong> · 带教人：' + r.mentor + ' · 实操周期：' + r.startDate + ' ~ ' + r.endDate;
-  if (canSeeSalary() && r.salaryBase) {
-    info += '<br>薪资：基本' + r.salaryBase + ' + 补贴' + (r.salaryAllowance || 0) + ' /月';
+  const salP = (r.salary && r.salary.probation) || {};
+  if (canSeeSalary() && salP.base) {
+    info += '<br>试用期薪资：基本' + salP.base + (salP.allowance ? ' + 补贴' + salP.allowance : '') + ' /月';
   }
   document.getElementById('settlePersonInfo').innerHTML = info;
 
   document.getElementById('f_settleDate').value = todayStr();
-  if (type === 'settle' && r.salaryBase) {
-    const daily = (r.salaryBase + (r.salaryAllowance || 0)) / 30;
+  const pBase = parseFloat(salP.base) || 0;
+  const pAllow = parseFloat(salP.allowance) || 0;
+  if (type === 'settle' && pBase) {
+    const daily = (pBase + pAllow) / 30;
     document.getElementById('f_settleAmount').value = Math.round(daily * r.practiceDays);
   } else {
     document.getElementById('f_settleAmount').value = '';
@@ -1396,6 +1463,8 @@ function openDetail(id) {
     '<div class="detail-item"><span class="detail-label">实操开始日期</span><span class="detail-value">' + r.startDate + '</span></div>' +
     '<div class="detail-item"><span class="detail-label">实操结束日期</span><span class="detail-value">' + r.endDate + '</span></div>' +
     '<div class="detail-item"><span class="detail-label">实操天数</span><span class="detail-value">' + r.practiceDays + ' 天</span></div>' +
+    '<div class="detail-item"><span class="detail-label">岗位</span><span class="detail-value">' + (r.position || '—') + '</span></div>' +
+    '<div class="detail-item"><span class="detail-label">门禁卡</span><span class="detail-value">' + (r.accessCard || '—') + '</span></div>' +
     '<div class="detail-item"><span class="detail-label">当前状态</span><span class="detail-value"><span class="badge ' + cfg.badge + '">' + cfg.label + '</span></span></div>' +
     contactHtml +
     (r.remark ? '<div class="detail-item full"><span class="detail-label">备注</span><span class="detail-value" style="font-weight:400;">' + r.remark + '</span></div>' : '') +
@@ -1403,16 +1472,17 @@ function openDetail(id) {
 
   // Salary (HR/Manager only)
   if (seeSalary) {
-    if (r.salaryBase || r.salaryStructure) {
-      html += '<div class="detail-section"><div class="detail-section-title">薪资结构（SSC登记）</div><div class="salary-struct-box">' +
-        '<div class="label">薪资结构</div><div class="value">' + (r.salaryStructure || '—') + '</div></div>' +
-        '<div class="detail-grid">' +
-        '<div class="detail-item"><span class="detail-label">基本工资</span><span class="detail-value">' + (r.salaryBase || 0) + ' 元/月</span></div>' +
-        '<div class="detail-item"><span class="detail-label">补贴/其他</span><span class="detail-value">' + (r.salaryAllowance || 0) + ' 元/月</span></div>' +
-        (r.salaryNote ? '<div class="detail-item full"><span class="detail-label">薪资备注</span><span class="detail-value" style="font-weight:400;">' + r.salaryNote + '</span></div>' : '') +
+    if (r.hasSalary) {
+      const sal = r.salary || {};
+      const p = sal.probation || {};
+      const g = sal.regular || {};
+      const stageRow = (label, st) => '<div class="detail-item"><span class="detail-label">' + label + '</span><span class="detail-value" style="font-weight:400;">基本 ' + (st.base || '—') + ' ｜ 绩效 ' + (st.perf || '—') + ' ｜ 提成 ' + (st.commission || '—') + ' ｜ 补贴 ' + (st.allowance || '—') + '</span></div>';
+      html += '<div class="detail-section"><div class="detail-section-title">薪资构成（SSC登记·按offer标准）</div><div class="detail-grid">' +
+        stageRow('试用期', p) + stageRow('转正后', g) +
+        (sal.note ? '<div class="detail-item full"><span class="detail-label">浮动说明</span><span class="detail-value" style="font-weight:400;">' + sal.note + '</span></div>' : '') +
         '</div></div>';
     } else {
-      html += '<div class="detail-section"><div class="detail-section-title">薪资结构（SSC登记）</div><div class="days-text">尚未登记薪资</div></div>';
+      html += '<div class="detail-section"><div class="detail-section-title">薪资构成（SSC登记）</div><div class="days-text">尚未登记薪资构成</div></div>';
     }
 
     if (r.feedback) {
@@ -1572,17 +1642,19 @@ async function openLogsModal() {
 function exportCSV() {
   if (records.length === 0) return showToast('暂无数据', 'error');
   const seeSalary = canSeeSalary();
-  let headers = ['实操人员', '一级部门', '二级部门', '带教人', '开始日期', '结束日期', '天数', '设备型号', '配件', '序列号', '状态'];
-  if (seeSalary) headers = headers.concat(['薪资结构', '基本工资', '补贴', '反馈结果', '反馈日期', '结算日期', '结算金额', '入职日期', '入职耗时(天)']);
+  let headers = ['实操人员', '一级部门', '二级部门', '带教人', '岗位', '门禁卡', '开始日期', '结束日期', '天数', '设备型号', '配件', '序列号', '状态'];
+  if (seeSalary) headers = headers.concat(['试用期薪资构成', '转正薪资构成', '浮动说明', '反馈结果', '反馈日期', '结算日期', '结算金额', '入职日期', '入职耗时(天)']);
 
   const rows = records.map(r => {
     const cfg = STATUS_CONFIG[r.status] || { label: r.status };
-    let row = [r.name, r.dept1 || '', r.dept2 || '', r.mentor, r.startDate, r.endDate, r.practiceDays, r.deviceModel, r.accessories, r.serialNumber, cfg.label];
+    let row = [r.name, r.dept1 || '', r.dept2 || '', r.mentor, r.position || '', r.accessCard || '', r.startDate, r.endDate, r.practiceDays, r.deviceModel, r.accessories, r.serialNumber, cfg.label];
     if (seeSalary) {
+      const sal = r.salary || {};
+      const fmtStage = st => st ? ['base','perf','commission','allowance'].map(k => st[k] || '').join('/') : '';
       row = row.concat([
-        r.salaryStructure || '',
-        r.salaryBase || '',
-        r.salaryAllowance || '',
+        fmtStage(sal.probation),
+        fmtStage(sal.regular),
+        sal.note || '',
         r.feedback ? (r.feedback.result === 'pass' ? '通过' : '不通过') : '',
         r.feedback ? r.feedback.date : '',
         r.settlement ? r.settlement.date : '',
